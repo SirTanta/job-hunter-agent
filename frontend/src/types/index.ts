@@ -93,3 +93,16 @@ export interface SkillGapData {
   skills: SkillGapItem[];
   summary: string;
 }
+
+export interface UserProfile {
+  name: string;
+  experience_level: "fresher" | "junior" | "mid" | "senior";
+  job_categories: string[];
+  preferred_locations: string[];
+  skills: string;
+  resume_text?: string;
+  preferences: {
+    min_fit_score: number;
+    max_jobs_per_run: number;
+  };
+}

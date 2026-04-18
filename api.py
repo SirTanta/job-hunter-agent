@@ -77,11 +77,46 @@ def startup():
             cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS interview_prep JSONB")
             cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS rejection_text TEXT")
             cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS rejection_reason JSONB")
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_profile (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT,
+                    experience_level TEXT,
+                    job_categories JSONB,
+                    preferred_locations JSONB,
+                    skills TEXT,
+                    resume_text TEXT,
+                    preferences JSONB,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
         conn.commit()
         conn.close()
-        logger.info("fit_breakdown + interview_prep columns ready")
+        logger.info("schema migrations ready")
     except Exception as e:
         logger.error(f"column migration error: {e}")
+
+    # Load profile into CANDIDATE_SUMMARY if one exists
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT name, experience_level, skills, preferred_locations, job_categories FROM user_profile ORDER BY id DESC LIMIT 1")
+            profile = cur.fetchone()
+        conn.close()
+        if profile:
+            global CANDIDATE_SUMMARY
+            locs = ", ".join(profile["preferred_locations"] or [])
+            cats = ", ".join(profile["job_categories"] or [])
+            CANDIDATE_SUMMARY = (
+                f"{profile['name']} — {profile['experience_level']} level. "
+                f"Skills: {profile['skills']}. "
+                f"Preferred locations: {locs}. "
+                f"Looking for: {cats} roles."
+            )
+            logger.info("CANDIDATE_SUMMARY loaded from user_profile")
+    except Exception as e:
+        logger.error(f"profile load error: {e}")
 
 # ─────────────────────────────
 # ROOT
@@ -584,6 +619,76 @@ async def get_interview_prep(job_id: int):
     except Exception as e:
         logger.error(f"interview_prep error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+# ─────────────────────────────
+# ONBOARDING
+# ─────────────────────────────
+class OnboardingRequest(BaseModel):
+    name: str
+    experience_level: str
+    job_categories: list
+    preferred_locations: list
+    skills: str
+    resume_text: Optional[str] = None
+    preferences: dict = {}
+
+
+@router.get("/onboarding")
+async def get_onboarding():
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM user_profile ORDER BY id DESC LIMIT 1")
+            row = cur.fetchone()
+        conn.close()
+        if not row:
+            return {"profile": None}
+        return {"profile": dict(row)}
+    except Exception as e:
+        logger.error(f"get_onboarding error: {e}")
+        return {"profile": None}
+
+
+@router.post("/onboarding")
+async def save_onboarding(body: OnboardingRequest):
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM user_profile")
+            cur.execute(
+                """INSERT INTO user_profile
+                   (name, experience_level, job_categories, preferred_locations, skills, resume_text, preferences)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
+                   RETURNING *""",
+                (
+                    body.name,
+                    body.experience_level,
+                    json.dumps(body.job_categories),
+                    json.dumps(body.preferred_locations),
+                    body.skills,
+                    body.resume_text,
+                    json.dumps(body.preferences),
+                )
+            )
+            row = dict(cur.fetchone())
+        conn.commit()
+        conn.close()
+
+        global CANDIDATE_SUMMARY
+        CANDIDATE_SUMMARY = (
+            f"{body.name} — {body.experience_level} level. "
+            f"Skills: {body.skills}. "
+            f"Preferred locations: {', '.join(body.preferred_locations)}. "
+            f"Looking for: {', '.join(body.job_categories)} roles."
+        )
+        logger.info(f"CANDIDATE_SUMMARY updated for {body.name}")
+
+        return {"success": True, "profile": row}
+    except Exception as e:
+        logger.error(f"save_onboarding error: {e}")
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="Failed to save profile")
+
 
 # ─────────────────────────────
 # SKILL GAP

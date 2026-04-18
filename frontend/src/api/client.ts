@@ -12,6 +12,7 @@ import type {
   RejectionReason,
   SkillGapData,
   Stats,
+  UserProfile,
 } from "../types";
 
 type QueryParams = Record<string, string | number | boolean | undefined>;
@@ -90,6 +91,19 @@ export async function fetchSkillGap(): Promise<SkillGapData> {
   return response.data.skill_gap;
 }
 
+export async function fetchOnboarding(): Promise<UserProfile | null> {
+  const response = await apiClient.get<{ profile: UserProfile | null }>("/api/onboarding");
+  return response.data.profile;
+}
+
+export async function saveOnboarding(profile: UserProfile): Promise<UserProfile> {
+  const response = await apiClient.post<{ success: boolean; profile: UserProfile }>(
+    "/api/onboarding",
+    profile,
+  );
+  return response.data.profile;
+}
+
 export async function fetchApplyToday(): Promise<{ applications: Application[]; count: number; date: string }> {
   const response = await apiClient.get<{ applications: Application[]; count: number; date: string }>(
     "/api/apply-today",
@@ -123,3 +137,4 @@ export async function generateFollowUp(jobId: number): Promise<FollowUpEmail> {
   const response = await apiClient.post<{ follow_up: FollowUpEmail }>(`/api/jobs/${jobId}/follow-up`);
   return response.data.follow_up;
 }
+
