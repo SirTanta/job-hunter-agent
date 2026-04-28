@@ -131,7 +131,43 @@ class JobHunterAgent:
                 self._stats["errors"].append(str(e))
 
         print("\n[SUMMARY]", self._stats)
+        self._print_links_report()
         return self._stats
+
+    def _print_links_report(self):
+        """Print all application links to stdout for easy copy-paste."""
+        try:
+            rows = self.tracker.conn.execute(
+                """SELECT j.job_title, j.company_name, j.job_url, j.status,
+                          a.resume_path, a.applied_at
+                   FROM jobs j
+                   LEFT JOIN applications a ON a.job_id = j.id
+                   ORDER BY a.applied_at DESC
+                   LIMIT 50"""
+            ).fetchall()
+
+            if not rows:
+                return
+
+            print("\n" + "="*70)
+            print("APPLICATION LINKS")
+            print("="*70)
+            for r in rows:
+                title    = r[0] or "?"
+                company  = r[1] or "?"
+                url      = r[2] or ""
+                resume   = r[4] or ""
+                resume_f = resume.split("\\")[-1].split("/")[-1] if resume else ""
+                print(f"\n  {title} @ {company}")
+                if url:
+                    print(f"  APPLY: {url}")
+                if resume_f:
+                    print(f"  RESUME: output/{resume_f}")
+            print("="*70)
+            print(f"\nNotion Dashboard:")
+            print("  https://www.notion.so/Job-Hunt-Dashboard-35084b118b54813a8ef2eca2cf434a03")
+        except Exception as e:
+            print(f"[links] Could not generate links report: {e}")
 
 
 def _parse_args():
