@@ -48,8 +48,9 @@ class ClientReplyProcessor(EmailProcessor):
 
     def __init__(self):
         super().__init__()
-        # Override the email address to use the Tanta work address
+        # Override email credentials to use the Tanta work address
         self.email_addr = os.environ.get("TANTA_EMAIL", "jedwards@tanta-holdings.com")
+        self.password   = os.environ.get("TANTA_IMAP_PASSWORD", self.password)
         self.notion_leads = NotionLeadsTracker()
 
     def _classify_email(self, subject: str, body: str, sender: str) -> dict:
