@@ -10,6 +10,7 @@ from tools.company_research import CompanyResearcher
 from tools.cover_letter import CoverLetterWriter
 from tools.cv_customizer import CVCustomizer
 from tools.job_finder import JobFinder
+from tools.notion_tracker import NotionTracker
 from tools.tracker import JobTracker
 
 
@@ -36,6 +37,7 @@ class JobHunterAgent:
         print(f"  Job limit: {self.limit}")
 
         self.tracker = JobTracker()
+        self.notion  = NotionTracker()
         self.job_finder = JobFinder()
         self.researcher = CompanyResearcher(tracker=self.tracker)
         self.cv_customizer = CVCustomizer()
@@ -104,6 +106,22 @@ class JobHunterAgent:
                         elif result["method"] == "manual":
                             self._stats["manual_review"] += 1
                         print(f"[apply] {result['method']}: {result['message']}")
+
+                        # Mirror to Notion dashboard
+                        self.notion.upsert_application(
+                            job=job,
+                            apply_result=result,
+                            company_profile=profile,
+                            cv_path=str(cv_path),
+                        )
+                    else:
+                        # Generate-only mode — still log to Notion as "Applied"
+                        self.notion.upsert_application(
+                            job=job,
+                            apply_result={"success": True, "method": "generated", "job_url": job.get("url", "")},
+                            company_profile=profile,
+                            cv_path=str(cv_path),
+                        )
 
                 self._stats["jobs_processed"] += 1
                 print("[OK] Done")
