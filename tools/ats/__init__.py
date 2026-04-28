@@ -81,38 +81,43 @@ def detect_ats(url: str) -> tuple[str, str]:
     return ("generic", "generic")
 
 
-def get_handler(url: str, **kwargs):
+def get_handler(url: str, tracker=None, email_monitor=None, **kwargs):
     """
     Instantiate and return the correct ATS handler for a URL.
-    All handlers share the same constructor signature.
+
+    Args:
+        tracker       : JobTracker instance for DB updates
+        email_monitor : EmailMonitor instance for real-time OTP capture
     """
     ats_name, module_name = detect_ats(url)
 
-    # Import the right handler module
+    # Only Workday needs email_monitor directly — others use the login manager via base
+    base_kwargs = {"tracker": tracker}
+
     if module_name == "linkedin":
         from tools.ats.linkedin import LinkedInHandler
-        return LinkedInHandler(**kwargs)
+        return LinkedInHandler(**base_kwargs)
     elif module_name == "indeed":
         from tools.ats.indeed import IndeedHandler
-        return IndeedHandler(**kwargs)
+        return IndeedHandler(**base_kwargs)
     elif module_name == "lever":
         from tools.ats.lever import LeverHandler
-        return LeverHandler(**kwargs)
+        return LeverHandler(**base_kwargs)
     elif module_name == "greenhouse":
         from tools.ats.greenhouse import GreenhouseHandler
-        return GreenhouseHandler(**kwargs)
+        return GreenhouseHandler(**base_kwargs)
     elif module_name == "ashby":
         from tools.ats.ashby import AshbyHandler
-        return AshbyHandler(**kwargs)
+        return AshbyHandler(**base_kwargs)
     elif module_name == "workday":
         from tools.ats.workday import WorkdayHandler
-        return WorkdayHandler(**kwargs)
+        return WorkdayHandler(tracker=tracker, email_monitor=email_monitor)
     elif module_name == "smartrecruiters":
         from tools.ats.smartrecruiters import SmartRecruitersHandler
-        return SmartRecruitersHandler(**kwargs)
+        return SmartRecruitersHandler(**base_kwargs)
     elif module_name == "bamboohr":
         from tools.ats.bamboohr import BambooHRHandler
-        return BambooHRHandler(**kwargs)
+        return BambooHRHandler(**base_kwargs)
     else:
         from tools.ats.generic import GenericHandler
-        return GenericHandler(ats_name=ats_name, **kwargs)
+        return GenericHandler(ats_name=ats_name, **base_kwargs)
