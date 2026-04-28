@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from tools.auto_apply import AutoApplier
 from tools.company_research import CompanyResearcher
 from tools.cover_letter import CoverLetterWriter
 from tools.cv_customizer import CVCustomizer
@@ -14,18 +15,21 @@ from tools.tracker import JobTracker
 
 class JobHunterAgent:
 
-    def __init__(self, dry_run=False, max_jobs=None, top_n=None, roles=None, locations=None):
+    def __init__(self, dry_run=False, max_jobs=None, top_n=None, roles=None,
+                 locations=None, auto_apply=False):
         self.dry_run = dry_run
+        self.auto_apply = auto_apply
 
-        # Single source of truth for limit
         self.limit = max_jobs or top_n or 5
 
         if top_n and not max_jobs:
             mode_label = f"TOP-{top_n} BY FIT SCORE"
         elif dry_run:
             mode_label = "DRY RUN"
+        elif auto_apply:
+            mode_label = "FULL RUN + AUTO APPLY"
         else:
-            mode_label = "FULL RUN"
+            mode_label = "FULL RUN (generate only)"
 
         print("\n[START] Initialising Job Hunter Agent...")
         print(f"  Mode:      {mode_label}")
@@ -36,11 +40,14 @@ class JobHunterAgent:
         self.researcher = CompanyResearcher(tracker=self.tracker)
         self.cv_customizer = CVCustomizer()
         self.cover_writer = CoverLetterWriter()
+        self.applier = AutoApplier(tracker=self.tracker)
 
         self._stats = {
             "jobs_found": 0,
             "jobs_processed": 0,
             "applications_saved": 0,
+            "auto_applied": 0,
+            "manual_review": 0,
             "errors": []
         }
 
@@ -77,15 +84,28 @@ class JobHunterAgent:
                     job_title=job.get("title")
                 )
 
-                # Generate (skip if dry run)
+                # Generate tailored CV + cover letter (skip if dry run)
                 if not self.dry_run:
                     cv_path = self.cv_customizer.customise(job, profile)
                     cover_path = self.cover_writer.write(job, profile, cv_path)
-                    self.tracker.save_application(job_id=job_id, cv_path=str(cv_path),
-                                                   cover_path=str(cover_path))
+                    self.tracker.save_application(
+                        job_id=job_id,
+                        company_id=profile.get("db_id"),
+                        cv_path=str(cv_path),
+                        cover_path=str(cover_path),
+                    )
+                    self._stats["applications_saved"] += 1
+
+                    # Auto-apply if enabled
+                    if self.auto_apply:
+                        result = self.applier.apply(job, cv_path, cover_path, profile)
+                        if result["success"]:
+                            self._stats["auto_applied"] += 1
+                        elif result["method"] == "manual":
+                            self._stats["manual_review"] += 1
+                        print(f"[apply] {result['method']}: {result['message']}")
 
                 self._stats["jobs_processed"] += 1
-                self._stats["applications_saved"] += 1
                 print("[OK] Done")
 
             except Exception as e:
@@ -97,10 +117,13 @@ class JobHunterAgent:
 
 
 def _parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--max", type=int)
-    parser.add_argument("--top", type=int)
+    parser = argparse.ArgumentParser(description="Job Hunter Agent")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Find and research jobs only — no CV generation or applying")
+    parser.add_argument("--max", type=int, help="Max number of jobs to process")
+    parser.add_argument("--top", type=int, help="Process only the top N jobs by fit score")
+    parser.add_argument("--auto-apply", action="store_true",
+                        help="Automatically submit applications (LinkedIn Easy Apply / Indeed)")
     return parser.parse_args()
 
 
@@ -110,7 +133,8 @@ if __name__ == "__main__":
         agent = JobHunterAgent(
             dry_run=args.dry_run,
             max_jobs=args.max,
-            top_n=args.top
+            top_n=args.top,
+            auto_apply=args.auto_apply,
         )
         stats = agent.run()
         sys.exit(1 if stats["errors"] else 0)

@@ -1,0 +1,65 @@
+Jon Edwards, M.Ed
+Rio Rancho, NM, USA | +1 (505) 514-2800 | [your_email] | [linkedin_url] | https://www.tantaholdings.com/solutions/portfolio
+
+PROFESSIONAL SUMMARY
+A senior-level Learning & Development professional with expertise delivering clear, accessible training for complex technical content. Designed and launched 40+ multi-audience enablement programs for internal teams, customers, and partners, leveraging AI-assisted tools and Articulate 360. Directed curriculum modernization for Cox Communications' Residential Sales Academy, aligning learning assets to revenue and performance metrics. Seeking to apply proven enablement strategy to accelerate organizational performance and learner success.
+
+SKILLS
+Instructional Design : ADDIE, Agile/SAM, Articulate 360, Storyline, Rise, eLearning development, curriculum design, LMS governance
+AI Tools : Microsoft Copilot, Copilot Studio, ChatGPT, Gemini, Claude, AI-assisted content development, LLM prompt engineering
+Platforms : SharePoint, Cornerstone LMS, Workday Learning, Adobe Captivate, Camtasia
+Leadership : Stakeholder management, instructional design team leadership, program management, vendor coordination
+Analysis : Needs assessment, performance consulting, data analysis, learning analytics, Kirkpatrick evaluation
+Tools : Microsoft Office Suite, Microsoft Teams, Jira, Confluence, Google Workspace, Figma
+
+EXPERIENCE
+
+Tanta Holdings LLC | Oct 2021 - Present
+President / Training Director - AI Enablement & Readiness
+• Founded Tanta Global Academy and created a multi-domain curriculum that helped virtual teams improve and validate skills in sales, marketing, client support, and remote operations
+• Architected a scalable AI-enabled learning ecosystem integrating LMS governance, structured evaluation models, and performance tracking to ensure measurable skill readiness and business impact
+• Designed and delivered 40+ enablement programs for teams, customers, and partners using ADDIE and Agile methods, resulting in higher adoption and improved skills
+• Built curriculum architecture from analysis to implementation, creating role-based learning paths, scenario assessments, capstone projects, and competency validation models, improving training consistency and learner performance
+• Translated complex technical and operational requirements into measurable learning systems supporting adoption of AI tools including Microsoft Copilot, Copilot Studio, ChatGPT, and Gemini
+• Applied data-driven iteration and feedback loops using LMS analytics and post-training surveys, boosting learner engagement scores by 15%, increasing AI tool adoption by 20%, and improving operational performance metrics
+
+Cox Communications (Contractor via Primus Software Corporation) | Sep 2025 - Dec 2025
+Senior Instructional Designer / Curriculum Development Manager
+• Directed curriculum modernization for Cox's Residential Sales Academy, aligning learning assets to revenue and performance metrics
+• Managed multi-team SME cycles and content mapping, applying stakeholder management and Figma to streamline development workflows, shortening the curriculum rollout timeline
+• Produced modular enablement assets for systems, sales processes, and customer experience using Figma and user research, improving onboarding efficiency for new sales staff
+
+SAIC | Dec 2024 - Sep 2025
+Senior Instructional Designer
+• Led a federal learning program for FAA modernization, collaborating with stakeholders to translate complex technical systems into clear training modules, enabling pilots and staff to meet new compliance standards on schedule
+• Partnered with engineering and operations SMEs, applying stakeholder-management and data-analysis techniques to clarify requirements and prioritize learning outcomes, streamlining the curriculum and reducing development time
+• Improved content governance, evaluation, and version control across training assets
+
+United States Naval Reserve | Jun 2007 - Mar 2024
+Administrative Services Manager - Petty Officer 1st Class
+• Led readiness and training enablement for 200+ personnel across multiple operational roles by designing curriculum, coordinating schedules, and using Microsoft Office Suite to track progress, resulting in improved readiness and timely completion of required training
+• Managed training documentation, governance systems, and compliance alignment by implementing SharePoint repositories and regular audit cycles, ensuring continuous compliance with Navy standards
+
+ADDITIONAL PROFESSIONAL EXPERIENCE
+
+Southern California Edison - Contractor | Senior Instructional Designer
+• Redesigned 15+ facilitator guides, student guides, and eLearning courses for substation and electrical operations training within strict deadlines, improving technical accuracy and learner engagement for a utility engineering audience
+
+Applied Materials - Contractor | Senior Instructional Designer
+• Managed 11 concurrent eLearning projects; translated technical product content into learning modules
+
+Department of Energy - Contractor | Senior Instructional Designer / eLearning Developer
+• Developed 3,000+ hours of compliance and technical eLearning; led 508/WCAG accessibility initiatives
+
+Presbyterian Healthcare Services | Epic Instructional Designer / Credentialed Trainer
+• Built blended learning and systems enablement programs across diverse technical environments
+
+Northrop Grumman Corporation | Instructional Designer
+• Developed 12 storyboards with 170+ pages of content and 450+ screenshots, resulting in 40+ quick instructional guides and five Facilitator/Student guides
+
+EDUCATION
+Western Governors University | Master's, Education - Learning and Technology | Jan 2022
+University of New Mexico | Bachelor's, Science - Technology and Training | May 2012
+
+CERTIFICATIONS
+Articulate 360 Certified

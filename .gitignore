@@ -8,6 +8,7 @@ output/
 data.db
 .DS_Store
 .claude/
-templates/
+# templates/ contains personal resume data — track the base template but not outputs
+# templates/
 *.docx
 *.pdf
