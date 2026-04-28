@@ -199,14 +199,13 @@ class JobFinder:
                     q,
                     num_results=8,
                     start_published_date=start_date,
-                    contents={"highlights": {"max_characters": 1000}},
+                    highlights={"max_characters": 1000},
                 )
                 for r in res.results:
                     url = r.url or ""
                     if _is_aggregator(url):
                         continue
-                    highlights = getattr(r, "highlights", None) or []
-                    desc = " ".join(highlights) if isinstance(highlights, list) else ""
+                    desc = " ".join(r.highlights) if r.highlights else ""
                     results.append({
                         "title":       r.title or role,
                         "url":         url,

@@ -262,6 +262,9 @@ class ATSLoginManager:
         If monitor isn't running, start it for this call only.
         """
         if self.monitor and self.monitor._conn:
+            # Apply sender_filter even when monitor is already running
+            if sender_filter:
+                self.monitor._sender_filter = sender_filter
             return self.monitor.wait_for_code(timeout=timeout)
 
         # One-shot: start monitor just for this OTP

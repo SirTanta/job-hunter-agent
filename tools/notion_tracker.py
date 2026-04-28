@@ -270,8 +270,8 @@ class NotionTracker:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return json.loads(resp.read())
         except urllib.error.HTTPError as e:
-            body = e.read().decode()[:300]
-            print(f"[notion] {method} {url} → {e.code}: {body}")
+            body = e.read().decode()[:400]
+            print(f"[notion] HTTP {e.code} on {method} {url[-60:]}: {body}")
             return None
         except Exception as e:
             print(f"[notion] Request failed: {e}")

@@ -256,7 +256,16 @@ class WorkdayHandler(BaseATSHandler):
                             otp_field.press("Enter")
                             time.sleep(2)
 
-                    return True
+                    # Verify confirmation appeared before reporting success
+                    for csel in CONFIRM_SELECTORS:
+                        try:
+                            if page.query_selector(csel):
+                                print(f"[workday] Submit confirmed at step {step+1}")
+                                return True
+                        except Exception:
+                            pass
+                    # No confirmation found after submit click
+                    return False
 
             # Try next
             advanced = False
@@ -287,10 +296,13 @@ class WorkdayHandler(BaseATSHandler):
             "input[aria-label='First Name']",
         ], p.get("name", "").split()[0])
 
+        # Get last name — strip credentials suffix first
+        name_clean = p.get("name", "").split(",")[0].strip()  # "Jon Edwards"
+        last_name = name_clean.split()[-1]  # "Edwards"
         _fill_if_present(page, [
             "input[data-automation-id='legalNameSection_lastName']",
             "input[aria-label='Last Name']",
-        ], p.get("name", "").split()[-1])
+        ], last_name)
 
         _fill_if_present(page, [
             "input[data-automation-id='email']",
