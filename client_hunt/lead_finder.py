@@ -23,6 +23,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import sys
+from pathlib import Path
+# Allow importing from tools/ when running from project root or sub-directories
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from tools.tavily_budget import tavily_ok, tavily_used
+
 
 SIGNAL_QUERIES = [
     ("ai_initiative", '"AI training program" OR "AI enablement" OR "workforce AI" company announcement'),
@@ -94,9 +100,13 @@ class LeadFinder:
                 print(f"[lead_finder/exa] {signal_type}: {e}")
             time.sleep(0.2)
 
-        # Tavily queries (last 90 days)
+        # Tavily queries (last 90 days) — gated by shared daily budget
         for query in TAVILY_QUERIES:
+            if not tavily_ok():
+                print(f"[lead_finder/tavily] Daily budget exhausted — skipping remaining Tavily queries")
+                break
             try:
+                tavily_used()
                 res = self.tavily.search(
                     query=query,
                     search_depth="advanced",

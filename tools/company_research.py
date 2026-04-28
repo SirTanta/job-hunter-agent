@@ -28,6 +28,7 @@ from tavily import TavilyClient
 load_dotenv()
 
 from config import CANDIDATE_PROFILE, TARGET_ROLES, JOB_PREFERENCES
+from tools.tavily_budget import tavily_ok, tavily_used
 
 # ---------------------------------------------------------------------------
 # Candidate summary built from config.py — edit config.py to change this.
@@ -62,24 +63,20 @@ MAX_CHARS_PER_SOURCE = 2000
 
 # ---------------------------------------------------------------------------
 # Tavily daily budget guard
-# Tavily's free/starter plans cap daily API calls. Once we hit the limit every
-# subsequent call fails noisily. We track calls at module level (persists for
-# the lifetime of one agent process) and skip Tavily proactively when the
-# budget is exhausted, falling through to Exa-only data silently.
+# Delegates to tools.tavily_budget, which persists the call counter in
+# output/tavily_budget.json. The budget is shared across all callers
+# (company_research, job_finder, lead_finder) and all process restarts.
+# Daily cap: 20 calls/day — see tools/tavily_budget.py for credit math.
 # ---------------------------------------------------------------------------
-_TAVILY_CALLS   = 0
-TAVILY_DAILY_LIMIT = 80
-
 
 def _tavily_ok() -> bool:
-    """Return True if we still have Tavily budget remaining."""
-    return _TAVILY_CALLS < TAVILY_DAILY_LIMIT
+    """Return True if we still have Tavily budget remaining today."""
+    return tavily_ok()
 
 
 def _tavily_used() -> None:
-    """Increment the module-level Tavily call counter."""
-    global _TAVILY_CALLS
-    _TAVILY_CALLS += 1
+    """Increment the persistent Tavily call counter."""
+    tavily_used()
 
 
 class CompanyResearcher:

@@ -28,7 +28,8 @@ from tavily import TavilyClient
 
 load_dotenv()
 
-from config import TARGET_ROLES, JOB_PREFERENCES
+from config import TARGET_ROLES, JOB_PREFERENCES, TAVILY_SEARCH_ROLES
+from tools.tavily_budget import tavily_ok, tavily_used
 
 # JobRight.ai session cookie — stored in .env as JOBRIGHT_SESSION_ID
 JOBRIGHT_SESSION = os.environ.get("JOBRIGHT_SESSION_ID", "3e9e3d0100d24b4c8f85ee6b965a9c1c")
@@ -190,15 +191,20 @@ class JobFinder:
         jobs += jobright_jobs
         print(f"[job_finder/jobright] {len(jobright_jobs)} jobs")
 
+        # Exa searches all roles (neural, handles semantic overlap well)
+        # Tavily uses only 3 umbrella terms to stay within 1000/month quota
+        tavily_roles = set(TAVILY_SEARCH_ROLES)
+
         for role in SEARCH_ROLES:
             for loc in SEARCH_LOCATIONS:
                 # Search 1: direct career pages via Exa (neural, recency-biased)
                 exa_jobs = self._search_exa_direct(role, loc, freshness_days)
                 jobs += exa_jobs
 
-                # Search 2: Tavily with site: operators to surface company careers
-                tavily_jobs = self._search_tavily_direct(role, loc)
-                jobs += tavily_jobs
+                # Search 2: Tavily — only for umbrella roles (3 calls instead of 20)
+                if role in tavily_roles:
+                    tavily_jobs = self._search_tavily_direct(role, loc)
+                    jobs += tavily_jobs
 
                 time.sleep(0.2)
 
@@ -373,10 +379,16 @@ class JobFinder:
         """
         Use Tavily with time-filtered search to find fresh postings.
         Focus on last 7 days. Filter out aggregators post-search.
+        Gated by the shared daily budget (tools/tavily_budget.py).
         """
+        if not tavily_ok():
+            print(f"[job_finder/tavily] Daily budget exhausted — skipping Tavily for '{role}'")
+            return []
+
         query = f'"{role}" job opening {loc} -site:linkedin.com -site:indeed.com -site:glassdoor.com'
 
         try:
+            tavily_used()
             res = self.tavily.search(
                 query=query,
                 search_depth="advanced",

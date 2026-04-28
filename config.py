@@ -218,6 +218,15 @@ SEARCH_CONFIG = {
     "freshness_days": 7,
 }
 
+# Tavily is rate-limited (1000 calls/month free tier).
+# These 3 umbrella terms cover all 20 TARGET_ROLES — use them instead of
+# running a separate Tavily query per role.
+TAVILY_SEARCH_ROLES = [
+    "AI Enablement Lead",
+    "Senior Instructional Designer",
+    "L&D Director",
+]
+
 OUTPUT_CONFIG = {
     "output_dir": "output/",
     "resume_format": "docx",
