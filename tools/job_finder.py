@@ -48,6 +48,7 @@ AGGREGATOR_DOMAINS = {
     "remoterocketship.com", "expertini.com", "irvinetechcorp.com",
     "gofractional.com", "insightpartners.com", "edtech.com",
     "jooble.org", "jobgether.com", "talent.com", "jobsora.com",
+    "remotive.com", "remotivated.com", "weworkremotely.com", "workingnomads.com",
 }
 
 # URL path patterns that indicate a listing/category page, not a job post.
