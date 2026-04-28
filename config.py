@@ -163,27 +163,37 @@ TARGET_ROLES = [
     "AI Training Specialist",
     "LLM Enablement Consultant",
     "Learning Technology Lead",
+    "AI Learning Specialist",
     # Instructional Design track
     "Senior Instructional Designer",
     "Instructional Design Manager",
     "Senior eLearning Developer",
+    "eLearning Developer",
     "Senior Learning Experience Designer",
     "Instructional Systems Designer",
-    "eLearning Developer",
     "Curriculum Developer",
+    "Corporate Trainer",
     # Leadership track
     "Director of Learning and Development",
     "L&D Director",
     "Director of Instructional Design",
     "Head of Learning",
+    "Training Manager",
 ]
 
 JOB_PREFERENCES = {
-    "locations": ["Remote", "Albuquerque NM", "Rio Rancho NM"],
-    "experience_level": ["senior", "lead", "director", "manager"],
-    "min_experience_years": 8,
+    "locations": ["Remote"],
+    "experience_level": ["mid", "senior", "lead", "director", "executive"],
+    "min_experience_years": 5,
     "max_experience_years": 20,
-    "employment_type": ["full-time"],
+    "employment_type": ["full-time", "contract", "part-time"],
+    "job_functions": [
+        "Corporate Training and Development",
+        "Educational Administration",
+        "Instructional Design",
+        "eLearning Development",
+        "AI Enablement",
+    ],
     "industries": [
         "Technology",
         "Defense",

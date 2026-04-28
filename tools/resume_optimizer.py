@@ -37,7 +37,7 @@ BASE_CV_PATH = Path("templates/resume_base.txt")
 OUTPUT_DIR   = Path(OUTPUT_CONFIG["output_dir"])
 
 # Sonnet for resume — highest reasoning quality needed here
-SONNET_MODEL = "claude-sonnet-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-6"
 
 # Section heading markers Claude must use in its response
 SECTION_MARKERS = [

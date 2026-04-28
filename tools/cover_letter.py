@@ -37,7 +37,7 @@ load_dotenv()
 BASE_TEMPLATE_PATH = Path("templates/cover_letter_base.txt")
 OUTPUT_DIR         = Path(OUTPUT_CONFIG["output_dir"])
 
-SONNET_MODEL = "claude-sonnet-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-6"
 
 # Max chars we pull from the tailored resume to give Claude context
 MAX_CV_CHARS = 3000

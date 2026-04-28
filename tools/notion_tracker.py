@@ -230,7 +230,7 @@ class NotionTracker:
         if job_url:
             props["Job URL"] = {"url": job_url}
         if resume_file:
-            props["Resume File"] = {"rich_text": [{"text": {"content": resume_file}}]}
+            props["CV File"] = {"rich_text": [{"text": {"content": resume_file}}]}
         if notes:
             props["Notes"] = {"rich_text": [{"text": {"content": notes}}]}
         return props

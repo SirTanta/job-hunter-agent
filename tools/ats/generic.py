@@ -27,7 +27,7 @@ load_dotenv()
 
 from tools.ats.base import BaseATSHandler
 
-SONNET_MODEL = "claude-sonnet-4-5-20251001"
+SONNET_MODEL = "claude-sonnet-4-6"
 
 
 class GenericHandler(BaseATSHandler):
