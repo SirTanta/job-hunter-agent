@@ -6,21 +6,32 @@ based on company buy signals. 3 short paragraphs, 150 words max.
 """
 
 import os
+import random
 import re
 from typing import Optional
 
 from dotenv import load_dotenv
 
+from client_hunt.config import TANTA_PROFILE
+
 load_dotenv()
 
 SONNET_MODEL = "claude-sonnet-4-6"
 
-JON_PROFILE = """- Title: AI Enablement Consultant & Instructional Designer
-- Company: Tanta Holdings LLC
-- Background: 15+ years L&D, federal/defense/healthcare/energy sectors
-- Key clients: SAIC (FAA modernization), Cox Communications (Sales Academy), DoE (3,000+ hrs compliance eLearning), SCE, Northrop Grumman
-- Specialty: AI enablement curriculum, LMS buildouts, workforce upskilling
-- Education: M.Ed Learning & Technology (WGU), Navy veteran"""
+
+def _build_jon_profile() -> str:
+    """Build a profile string with a randomly selected proof point for variety."""
+    proof = random.choice(TANTA_PROFILE["proof_points"])
+    services_sample = TANTA_PROFILE["services"][:3]
+    return (
+        f"- Title: {TANTA_PROFILE['title']}\n"
+        f"- Company: {TANTA_PROFILE['company']}\n"
+        f"- Background: 15+ years L&D, federal/defense/healthcare/energy sectors\n"
+        f"- Services: {'; '.join(services_sample)}\n"
+        f"- Key proof point to reference: {proof}\n"
+        f"- Education: M.Ed Learning & Technology (WGU), Navy veteran"
+    )
+
 
 PITCH_PROMPT = """You are writing a cold outreach email for Jon Edwards, founder of Tanta Holdings LLC.
 
@@ -28,16 +39,16 @@ JON'S PROFILE:
 {profile}
 
 TARGET COMPANY: {company_name}
-SIGNAL THAT TRIGGERED THIS: {signal_type} — {signal_text}
+SIGNAL THAT TRIGGERED THIS: {signal_type} - {signal_text}
 ADDITIONAL CONTEXT: {research_summary}
 
 Write exactly 3 short paragraphs. No subject line in body. No signature block.
 
-P1 (2-3 sentences): Lead with their specific signal — name what's happening at their company. Frame it as a gap or challenge. Do NOT start with "I" or "We".
-P2 (3 sentences): One specific Tanta deliverable that maps to their situation. Reference one proof point from Jon's background.
-P3 (1 sentence): Low-commitment CTA — ask for 15 minutes.
+P1 (2-3 sentences): Lead with their specific signal - name what's happening at their company. Frame it as a gap or challenge. Do NOT start with "I" or "We".
+P2 (3 sentences): One specific Tanta deliverable that maps to their situation. Reference the proof point from Jon's profile.
+P3 (1 sentence): Low-commitment CTA - ask for 15 minutes.
 
-150 words max. Plain text only. No em-dashes.
+150 words max. Plain text only. No em-dashes. No long dashes.
 
 Then on a new line write: SUBJECT: [subject line under 60 chars that references their specific situation]"""
 
@@ -68,7 +79,7 @@ class PitchWriter:
             return self._build_fallback_pitch(lead)
 
         prompt = PITCH_PROMPT.format(
-            profile=JON_PROFILE,
+            profile=_build_jon_profile(),
             company_name=lead.get("company_name", "your company"),
             signal_type=lead.get("signal_type", ""),
             signal_text=lead.get("signal_text", "")[:300],
