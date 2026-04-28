@@ -417,6 +417,11 @@ class ApolloSender:
             "x-api-key":    self.api_key,
             "Content-Type": "application/json",
             "Accept":       "application/json",
+            # Realistic UA prevents Cloudflare bot-signature blocking (Error 1010)
+            "User-Agent":   (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
         }
         data = json.dumps(payload).encode() if payload is not None else None
         req  = urllib.request.Request(url, data=data, headers=headers, method=method)
