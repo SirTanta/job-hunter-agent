@@ -17,6 +17,8 @@ Tavily provides freshness signals via its date-aware search.
 import os
 import re
 import time
+import urllib.request
+import json
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
 
@@ -27,6 +29,9 @@ from tavily import TavilyClient
 load_dotenv()
 
 from config import TARGET_ROLES, JOB_PREFERENCES
+
+# JobRight.ai session cookie — stored in .env as JOBRIGHT_SESSION_ID
+JOBRIGHT_SESSION = os.environ.get("JOBRIGHT_SESSION_ID", "3e9e3d0100d24b4c8f85ee6b965a9c1c")
 
 SEARCH_ROLES     = TARGET_ROLES
 SEARCH_LOCATIONS = JOB_PREFERENCES["locations"]
@@ -112,6 +117,7 @@ class JobFinder:
     def __init__(self):
         self.tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
         self.exa    = Exa(api_key=os.getenv("EXA_API_KEY"))
+        self.jobright_session = JOBRIGHT_SESSION
 
     def search(self, freshness_days: int = 7) -> list[dict]:
         """
@@ -131,6 +137,11 @@ class JobFinder:
         """
         jobs = []
         cutoff_hours = freshness_days * 24
+
+        # Search 0: JobRight.ai — AI-matched recommendations, highest quality signal
+        jobright_jobs = self._search_jobright()
+        jobs += jobright_jobs
+        print(f"[job_finder/jobright] {len(jobright_jobs)} jobs")
 
         for role in SEARCH_ROLES:
             for loc in SEARCH_LOCATIONS:
@@ -169,6 +180,76 @@ class JobFinder:
     # ------------------------------------------------------------------
     # Exa search — direct company pages
     # ------------------------------------------------------------------
+
+    def _search_jobright(self, limit: int = 50) -> list[dict]:
+        """
+        Pull AI-matched job recommendations from JobRight.ai.
+
+        JobRight uses our profile to score matches — results are pre-ranked
+        by fit. We get displayScore (0-100) as the match signal.
+        Uses the SESSION_ID cookie from .env / JOBRIGHT_SESSION_ID.
+        """
+        if not self.jobright_session:
+            return []
+
+        url = (
+            f"https://jobright.ai/swan/recommend/list/jobs"
+            f"?refresh=true&sortCondition=0&position=0&limit={limit}"
+        )
+        headers = {
+            "Cookie": f"SESSION_ID={self.jobright_session}",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
+            "Referer": "https://jobright.ai/jobs",
+        }
+
+        try:
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+
+            if not data.get("success"):
+                print(f"[job_finder/jobright] API error: {data.get('errorMsg')}")
+                return []
+
+            raw_jobs = data.get("result", {}).get("jobList", [])
+            jobs = []
+            for item in raw_jobs:
+                jr = item.get("jobResult", {})
+                cr = item.get("companyResult", {})
+                match_score = item.get("displayScore", 0)
+
+                job_id  = jr.get("jobId", "")
+                title   = jr.get("jobTitle", "")
+                company = cr.get("name", jr.get("companyName", ""))
+                loc_str = jr.get("jobLocation", "")
+                remote  = jr.get("isRemote", False)
+                summary = jr.get("jobSummary", "")
+                posted  = jr.get("publishTime", "")
+                apply_url = jr.get("url", f"https://jobright.ai/jobs/{job_id}")
+
+                # Only remote jobs
+                if not remote and "remote" not in (loc_str + title).lower():
+                    continue
+
+                jobs.append({
+                    "title":        title,
+                    "url":          apply_url,
+                    "company":      company,
+                    "description":  summary[:500],
+                    "posted_date":  posted,
+                    "source":       "jobright",
+                    "match_score":  round(match_score),
+                })
+
+            return jobs
+
+        except Exception as e:
+            print(f"[job_finder/jobright] Error: {e}")
+            return []
 
     def _search_exa_direct(self, role: str, loc: str,
                            freshness_days: int = 7) -> list[dict]:
