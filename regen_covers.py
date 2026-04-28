@@ -166,7 +166,7 @@ def main():
         print(f"\n[{i}/5] {job['company']} — {job['title'][:55]}")
 
         profile  = profiles.get(job["company"].lower(), {})
-        cv_path  = OUTPUT_DIR / job["cv_file"]
+        resume_path  = OUTPUT_DIR / job["cv_file"]
 
         # Attach description from DB
         job_dict = {
@@ -174,12 +174,12 @@ def main():
             "description": descriptions.get(job["url"], ""),
         }
 
-        if not cv_path.exists():
-            print(f"       WARNING: CV file not found: {cv_path.name} — skipping")
+        if not resume_path.exists():
+            print(f"       WARNING: Resume file not found: {resume_path.name} — skipping")
             continue
 
         try:
-            cover_path = writer.write(job_dict, profile, cv_path)
+            cover_path = writer.write(job_dict, profile, resume_path)
             cover_map[job["company"].lower()] = cover_path.name
             print(f"       Saved: {cover_path.name}")
         except Exception as e:

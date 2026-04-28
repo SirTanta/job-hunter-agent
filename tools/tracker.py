@@ -93,7 +93,7 @@ class JobTracker:
             company_id   INTEGER REFERENCES companies(id),
             status       TEXT DEFAULT 'applied',
             applied_at   TEXT DEFAULT (datetime('now')),
-            cv_path      TEXT,
+            resume_path      TEXT,
             cover_path   TEXT,
             notes        TEXT,
             updated_at   TEXT DEFAULT (datetime('now'))
@@ -194,13 +194,13 @@ class JobTracker:
         return row[0]
 
     def save_application(self, job_id: int, company_id: int = None,
-                         cv_path: str = None, cover_path: str = None) -> int:
+                         resume_path: str = None, cover_path: str = None) -> int:
         sql = """
-        INSERT INTO applications (job_id, company_id, cv_path, cover_path)
+        INSERT INTO applications (job_id, company_id, resume_path, cover_path)
         VALUES (?, ?, ?, ?)
         RETURNING id;
         """
-        cur = self.conn.execute(sql, (job_id, company_id, cv_path, cover_path))
+        cur = self.conn.execute(sql, (job_id, company_id, resume_path, cover_path))
         row = cur.fetchone()
         self.conn.commit()
         return row[0]

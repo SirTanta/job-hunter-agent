@@ -152,7 +152,7 @@ SEARCH_CONFIG = {
 
 OUTPUT_CONFIG = {
     "output_dir": "output/",
-    "cv_format": "docx",
+    "resume_format": "docx",
     "cover_letter_format": "docx",
     "tracker_db": "jobs_tracker.db",
 }

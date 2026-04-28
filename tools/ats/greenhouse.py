@@ -14,7 +14,7 @@ from tools.ats.base import BaseATSHandler, _fill_if_present
 
 class GreenhouseHandler(BaseATSHandler):
 
-    def submit(self, page, job: dict, cv_path: Optional[Path],
+    def submit(self, page, job: dict, resume_path: Optional[Path],
                cover_path: Optional[Path]) -> dict:
         url = job.get("url", "")
         print(f"[greenhouse] Applying at {url}")
@@ -37,12 +37,12 @@ class GreenhouseHandler(BaseATSHandler):
             self.fill_standard_fields(page)
 
             # Greenhouse resume upload — may have both file input and paste-in textarea
-            resume_uploaded = self.upload_resume(page, cv_path)
+            resume_uploaded = self.upload_resume(page, resume_path)
 
             # If no file input, use the resume textarea
-            if not resume_uploaded and cv_path:
+            if not resume_uploaded and resume_path:
                 from tools.ats.base import _docx_to_text
-                text = _docx_to_text(cv_path)
+                text = _docx_to_text(resume_path)
                 resume_area = page.query_selector(
                     "textarea#resume_text, textarea[name*='resume' i]"
                 )

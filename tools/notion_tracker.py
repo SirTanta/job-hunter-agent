@@ -78,7 +78,7 @@ class NotionTracker:
 
     def upsert_application(self, job: dict, apply_result: dict,
                            company_profile: dict = None,
-                           cv_path: str = "") -> Optional[str]:
+                           resume_path: str = "") -> Optional[str]:
         """
         Create or update a Notion row for this application.
 
@@ -86,7 +86,7 @@ class NotionTracker:
             job            : job dict (title, company, url, location)
             apply_result   : result from AutoApplier (success, method, job_url)
             company_profile: company research dict (fit_score, overview, etc.)
-            cv_path        : path to the tailored CV file
+            resume_path        : path to the tailored resume file
 
         Returns the Notion page ID, or None on failure.
         """
@@ -103,7 +103,7 @@ class NotionTracker:
         ats_method    = apply_result.get("method", "generic")
         ats_display   = ATS_DISPLAY.get(ats_method, "Generic")
         fit_score     = (company_profile or {}).get("fit_score")
-        cv_filename   = os.path.basename(str(cv_path)) if cv_path else ""
+        resume_filename   = os.path.basename(str(resume_path)) if resume_path else ""
 
         props = self._build_properties(
             title      = job.get("title", "Unknown Role"),
@@ -113,7 +113,7 @@ class NotionTracker:
             applied_date = datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             fit_score  = fit_score,
             job_url    = url,
-            cv_file    = cv_filename,
+            resume_file    = resume_filename,
             notes      = (company_profile or {}).get("why_apply", "")[:200],
         )
 
@@ -212,7 +212,7 @@ class NotionTracker:
 
     def _build_properties(self, title: str, company: str, status: str,
                            ats: str, applied_date: str, fit_score,
-                           job_url: str, cv_file: str, notes: str) -> dict:
+                           job_url: str, resume_file: str, notes: str) -> dict:
         props = {
             "Job Title": {"title": [{"text": {"content": title[:200]}}]},
             "Status":    {"select": {"name": status}},
@@ -229,8 +229,8 @@ class NotionTracker:
                 pass
         if job_url:
             props["Job URL"] = {"url": job_url}
-        if cv_file:
-            props["CV File"] = {"rich_text": [{"text": {"content": cv_file}}]}
+        if resume_file:
+            props["Resume File"] = {"rich_text": [{"text": {"content": resume_file}}]}
         if notes:
             props["Notes"] = {"rich_text": [{"text": {"content": notes}}]}
         return props

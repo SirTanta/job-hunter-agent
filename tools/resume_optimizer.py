@@ -1,16 +1,16 @@
 """
-tools/cv_customizer.py — Tailors Tanzil's base CV to a specific job + company.
+tools/resume_optimizer.py — Tailors Jon's base resume to a specific job + company.
 
 Pipeline:
-  1. Load base CV from templates/cv_base.txt
+  1. Load base resume from templates/resume_base.txt
   2. Hydrate contact placeholders from .env
-  3. Build a detailed prompt: base CV + job description + company profile
-  4. Call Claude Sonnet (best model — CV quality is the most important output)
+  3. Build a detailed prompt: base resume + job description + company profile
+  4. Call Claude Sonnet (best model — Resume quality is the most important output)
   5. Parse Claude's response into structured sections
   6. Render a properly formatted .docx with python-docx
   7. Return the file path so the tracker and orchestrator can record it
 
-Fallback: if Claude fails at any point, the base CV is written as-is to .docx
+Fallback: if Claude fails at any point, the base resume is written as-is to .docx
 so the pipeline never stalls.
 """
 
@@ -33,30 +33,29 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 # Paths and model
 # ---------------------------------------------------------------------------
-BASE_CV_PATH = Path("templates/cv_base.txt")
+BASE_CV_PATH = Path("templates/resume_base.txt")
 OUTPUT_DIR   = Path(OUTPUT_CONFIG["output_dir"])
 
-# Sonnet for CV — highest reasoning quality needed here
-SONNET_MODEL = "claude-sonnet-4-5"
+# Sonnet for resume — highest reasoning quality needed here
+SONNET_MODEL = "claude-sonnet-4-5-20251001"
 
 # Section heading markers Claude must use in its response
 SECTION_MARKERS = [
     "PROFESSIONAL SUMMARY",
     "SKILLS",
     "EXPERIENCE",
-    "PROJECTS",
     "EDUCATION",
     "CERTIFICATIONS",
     "ADDITIONAL",
 ]
 
 
-class CVCustomizer:
+class ResumeOptimizer:
     """
-    Generates a job-specific, ATS-optimised CV as a .docx file.
+    Generates a job-specific, ATS-optimised resume as a .docx file.
 
     Usage:
-        customizer = CVCustomizer()
+        customizer = ResumeOptimizer()
         path = customizer.customise(job, company_profile)
     """
 
@@ -74,7 +73,7 @@ class CVCustomizer:
 
     def customise(self, job: dict, company_profile: Optional[dict] = None) -> Path:
         """
-        Produce a tailored CV .docx for the given job and company.
+        Produce a tailored resume .docx for the given job and company.
 
         Args:
             job             : dict from job_finder — needs at minimum:
@@ -91,9 +90,9 @@ class CVCustomizer:
         )
         job_title = job.get("title", "Software Engineer")
 
-        print(f"\n[cv_customizer] Tailoring CV for: {job_title} @ {company_name}")
+        print(f"\n[resume_customizer] Tailoring resume for: {job_title} @ {company_name}")
 
-        # Step 1 — load and hydrate the base CV
+        # Step 1 — load and hydrate the base resume
         base_cv = self._load_base_cv()
 
         # Step 2 — ask Claude to tailor it
@@ -110,7 +109,7 @@ class CVCustomizer:
         output_path = self._write_docx(tailored_text, filename, job_title,
                                        company_name, job, company_profile or {})
 
-        print(f"[cv_customizer] Saved: {output_path}")
+        print(f"[resume_customizer] Saved: {output_path}")
         return output_path
 
     # ------------------------------------------------------------------
@@ -119,7 +118,7 @@ class CVCustomizer:
 
     def _load_base_cv(self) -> str:
         """
-        Load the plain-text base CV and substitute contact placeholders
+        Load the plain-text base resume and substitute contact placeholders
         with real values from .env / config.
 
         Why substitute here rather than in the template:
@@ -150,7 +149,7 @@ class CVCustomizer:
         Construct the Claude prompt.
 
         Design decisions:
-          - We give Claude the full base CV, full job description, and the
+          - We give Claude the full base resume, full job description, and the
             company profile so it has maximum context.
           - We specify exact section headings it must use — this makes
             _parse_sections() reliable.
@@ -173,23 +172,25 @@ Why apply:       {cp.get('why_apply', '')}
 Fit score:       {cp.get('fit_score', 'N/A')}/10
 """.strip()
 
-        return f"""
-You are an expert CV writer and ATS optimisation specialist.
+        candidate_name = CANDIDATE_PROFILE.get("name", "the candidate")
 
-Your task is to tailor Tanzil Ahmed's CV for a specific job application.
-Rewrite the CV so it:
+        return f"""
+You are an expert resume writer and ATS optimisation specialist.
+
+Your task is to tailor {candidate_name}'s resume for a specific job application.
+Rewrite the resume so it:
   1. Mirrors the exact keywords and phrases from the job description
      (ATS systems do literal keyword matching — this is critical)
   2. Reorders skills to put the most relevant ones first
   3. Rewrites the professional summary to specifically address this company
      and role (use the company's language and values)
-  4. Strengthens bullet points in Experience and Projects with the job's
-     preferred action verbs and technical terms
+  4. Strengthens bullet points in Experience with the job's preferred action
+     verbs and technical terms
   5. Stays 100% truthful — only REFRAME existing facts, never fabricate
   6. Removes or de-emphasises skills irrelevant to this role
 
 ============================
-CANDIDATE'S BASE CV:
+CANDIDATE'S BASE RESUME:
 ============================
 {base_cv}
 
@@ -212,23 +213,22 @@ COMPANY PROFILE (from research):
 ============================
 OUTPUT RULES — READ CAREFULLY:
 ============================
-- Output ONLY the tailored CV text. No introduction, no explanation, no markdown.
+- Output ONLY the tailored resume text. No introduction, no explanation, no markdown.
 - Use EXACTLY these section headings on their own line, in ALL CAPS:
-    TANZIL AHMED          ← name first (not a section heading)
+    {candidate_name.upper()}   ← name first (not a section heading)
     PROFESSIONAL SUMMARY
     SKILLS
     EXPERIENCE
-    PROJECTS
     EDUCATION
     CERTIFICATIONS
     ADDITIONAL
-- Keep the contact line (email | phone | linkedin | github) directly under the name.
-- For skills: group into labelled rows like "Backend : Java, Spring Boot, ..."
+- Keep the contact line (email | phone | linkedin | portfolio) directly under the name.
+- For skills: group into labelled rows like "AI Tools : Copilot, ChatGPT, ..."
   Put the most relevant skill groups for THIS job first.
 - For bullet points: start every bullet with a strong action verb.
   Each bullet must include at least one keyword from the job description.
-- Keep the CV to a maximum of 2 pages of content.
-- Do NOT add any section the base CV does not have.
+- Keep the resume to a maximum of 2 pages of content.
+- Do NOT add any section the base resume does not have.
 - Do NOT add horizontal rules or decorative characters — plain text only.
 """
 
@@ -239,17 +239,17 @@ OUTPUT RULES — READ CAREFULLY:
     def _call_claude(self, base_cv: str, job: dict,
                      company_profile: dict) -> str:
         """
-        Send the prompt to Claude Sonnet and return the tailored CV text.
+        Send the prompt to Claude Sonnet and return the tailored resume text.
 
         Why Sonnet here:
-          CV tailoring requires nuanced reasoning — understanding which of
-          Tanzil's experiences best map to each requirement, choosing the
+          Resume tailoring requires nuanced reasoning — understanding which of
+          Jon's experiences best map to each requirement, choosing the
           right action verbs, writing a compelling summary. Haiku is too
           shallow for this. Sonnet gives a measurably better result.
 
         Fallback:
           If the API call fails for any reason (rate limit, network, etc.)
-          we return the base CV unchanged. The docx will still be written —
+          we return the base resume unchanged. The docx will still be written —
           it just won't be customised. The caller is notified via print.
         """
         prompt = self._build_prompt(base_cv, job, company_profile)
@@ -260,20 +260,20 @@ OUTPUT RULES — READ CAREFULLY:
                 messages=[{"role": "user", "content": prompt}],
             )
             tailored = message.content[0].text.strip()
-            print(f"[cv_customizer] Claude returned {len(tailored)} chars")
+            print(f"[resume_customizer] Claude returned {len(tailored)} chars")
             return tailored
 
         except Exception as e:
-            print(f"[cv_customizer] Claude call failed ({e}) — using base CV as fallback")
+            print(f"[resume_customizer] Claude call failed ({e}) — using base resume as fallback")
             return base_cv
 
     # ------------------------------------------------------------------
     # _parse_sections
     # ------------------------------------------------------------------
 
-    def _parse_sections(self, cv_text: str) -> dict:
+    def _parse_sections(self, resume_text: str) -> dict:
         """
-        Split the flat CV text Claude produced into a dict of sections.
+        Split the flat resume text Claude produced into a dict of sections.
 
         Why parse rather than dump the whole text into one paragraph:
           python-docx gives us full control over font sizes, bold headings,
@@ -296,7 +296,7 @@ OUTPUT RULES — READ CAREFULLY:
         sections: dict = {"header": []}
         current = "header"
 
-        for line in cv_text.splitlines():
+        for line in resume_text.splitlines():
             stripped = line.strip()
             upper    = stripped.upper()
 
@@ -318,13 +318,13 @@ OUTPUT RULES — READ CAREFULLY:
         """
         Build a safe, sortable filename for the output .docx.
 
-        Format: cv_[company]_[role]_[YYYY-MM-DD].docx
+        Format: resume_[company]_[role]_[YYYY-MM-DD].docx
 
         We slugify both strings: lowercase, spaces → underscores,
         drop everything that isn't alphanumeric or an underscore.
         This keeps filenames safe on all OSes and easy to sort by date.
 
-        Example: cv_thoughtworks_associate_software_engineer_2026-03-31.docx
+        Example: resume_thoughtworks_associate_software_engineer_2026-03-31.docx
         """
         def slugify(s: str) -> str:
             s = s.lower().strip()
@@ -335,17 +335,17 @@ OUTPUT RULES — READ CAREFULLY:
         company_slug = slugify(company_name)
         role_slug    = slugify(job_title)
         today        = date.today().isoformat()   # e.g. "2026-03-31"
-        return f"cv_{company_slug}_{role_slug}_{today}.docx"
+        return f"resume_{company_slug}_{role_slug}_{today}.docx"
 
     # ------------------------------------------------------------------
     # _write_docx
     # ------------------------------------------------------------------
 
-    def _write_docx(self, cv_text: str, filename: str,
+    def _write_docx(self, resume_text: str, filename: str,
                     job_title: str, company_name: str,
                     job: dict = None, company_profile: dict = None) -> Path:
         """
-        Render the tailored CV text into a properly formatted .docx file.
+        Render the tailored resume text into a properly formatted .docx file.
 
         Formatting decisions:
           - Name: 16pt bold, centred
@@ -359,7 +359,7 @@ OUTPUT RULES — READ CAREFULLY:
 
         Why python-docx instead of just saving a .txt:
           Recruiters open Word documents. A .docx lets us control fonts,
-          spacing, and layout — things that matter when the CV is printed
+          spacing, and layout — things that matter when the resume is printed
           or pasted into an ATS upload field.
         """
         doc = Document()
@@ -383,8 +383,8 @@ OUTPUT RULES — READ CAREFULLY:
         company_profile = company_profile or {}
         self._add_metadata_block(doc, job, company_profile)
 
-        # ── Parse the CV text into sections ────────────────────────────
-        sections = self._parse_sections(cv_text)
+        # ── Parse the resume text into sections ────────────────────────────
+        sections = self._parse_sections(resume_text)
 
         # ── Header block (name + contact) ──────────────────────────────
         self._add_header(doc, sections.get("header", ""))
@@ -420,9 +420,9 @@ OUTPUT RULES — READ CAREFULLY:
         """
         Write a small grey metadata block at the very top of the document.
 
-        This block tells Tanzil exactly where to apply and what the agent
-        scored the role — without affecting the CV content below it.
-        The grey colour keeps it visually separate from the actual CV.
+        This block tells Jon exactly where to apply and what the agent
+        scored the role — without affecting the resume content below it.
+        The grey colour keeps it visually separate from the actual resume.
         """
         lines = [
             f"APPLY HERE:  {job.get('url', '(no URL)')}",
@@ -509,7 +509,7 @@ OUTPUT RULES — READ CAREFULLY:
           • blank lines                      → small spacer paragraph
           • everything else                  → normal body paragraph
 
-        This gives the CV proper visual hierarchy without needing Heading styles.
+        This gives the resume proper visual hierarchy without needing Heading styles.
         """
         for line in content.splitlines():
             stripped = line.strip()

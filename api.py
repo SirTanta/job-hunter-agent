@@ -8,11 +8,10 @@ import queue
 import uuid
 import subprocess
 import asyncio
+import sqlite3
 
 from typing import Optional
 
-import psycopg2
-import psycopg2.extras
 from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -25,17 +24,28 @@ load_dotenv()
 # CONFIG
 # ─────────────────────────────
 BASE_DIR = pathlib.Path(__file__).parent.resolve()
-DATABASE_URL = os.environ.get("DATABASE_URL")
-PYTHON_EXEC = os.sys.executable  # portable — uses whatever python runs this file
+PYTHON_EXEC = os.sys.executable
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("api")
 
+
 # ─────────────────────────────
 # DB HELPERS
 # ─────────────────────────────
-def get_conn():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+def _db_path() -> str:
+    url = os.environ.get("DATABASE_URL", "")
+    if url.startswith("sqlite:///"):
+        return url[len("sqlite:///"):]
+    return str(BASE_DIR / "jobs_tracker.db")
+
+
+def get_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(_db_path(), check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
+
 
 # ─────────────────────────────
 # APP
@@ -50,73 +60,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ─────────────────────────────
 # STARTUP — ensure schema exists
 # ─────────────────────────────
 @app.on_event("startup")
 def startup():
-    """
-    Delegate schema creation to JobTracker — it is the single source of truth.
-    We open and immediately close a tracker just to run _create_schema().
-    """
-    if not DATABASE_URL:
-        logger.error("DATABASE_URL not set — skipping schema init")
-        return
     try:
         from tools.tracker import JobTracker
         tracker = JobTracker()
         tracker.close()
-        logger.info("PostgreSQL schema ready")
+        logger.info("SQLite schema ready")
     except Exception as e:
         logger.error(f"DB startup error: {e}")
-
-    try:
-        conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS fit_breakdown JSONB")
-            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS interview_prep JSONB")
-            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS rejection_text TEXT")
-            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS rejection_reason JSONB")
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS user_profile (
-                    id SERIAL PRIMARY KEY,
-                    name TEXT,
-                    experience_level TEXT,
-                    job_categories JSONB,
-                    preferred_locations JSONB,
-                    skills TEXT,
-                    resume_text TEXT,
-                    preferences JSONB,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-        conn.commit()
-        conn.close()
-        logger.info("schema migrations ready")
-    except Exception as e:
-        logger.error(f"column migration error: {e}")
 
     # Load profile into CANDIDATE_SUMMARY if one exists
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT name, experience_level, skills, preferred_locations, job_categories FROM user_profile ORDER BY id DESC LIMIT 1")
-            profile = cur.fetchone()
+        row = conn.execute(
+            "SELECT name, experience_level, skills, preferred_locations, job_categories "
+            "FROM user_profile ORDER BY id DESC LIMIT 1"
+        ).fetchone()
         conn.close()
-        if profile:
+        if row:
+            locs = ", ".join(json.loads(row["preferred_locations"] or "[]"))
+            cats = ", ".join(json.loads(row["job_categories"] or "[]"))
             global CANDIDATE_SUMMARY
-            locs = ", ".join(profile["preferred_locations"] or [])
-            cats = ", ".join(profile["job_categories"] or [])
             CANDIDATE_SUMMARY = (
-                f"{profile['name']} — {profile['experience_level']} level. "
-                f"Skills: {profile['skills']}. "
+                f"{row['name']} — {row['experience_level']} level. "
+                f"Skills: {row['skills']}. "
                 f"Preferred locations: {locs}. "
                 f"Looking for: {cats} roles."
             )
             logger.info("CANDIDATE_SUMMARY loaded from user_profile")
     except Exception as e:
         logger.error(f"profile load error: {e}")
+
 
 # ─────────────────────────────
 # ROOT
@@ -125,6 +104,7 @@ def startup():
 def serve_ui():
     return FileResponse(str(BASE_DIR / "index.html"))
 
+
 # ─────────────────────────────
 # STATS
 # ─────────────────────────────
@@ -132,38 +112,27 @@ def serve_ui():
 def get_stats():
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) AS count FROM jobs")
-            total_jobs = cur.fetchone()["count"]
+        today = datetime.date.today().isoformat()
 
-            cur.execute("""
-                SELECT COUNT(*) AS count FROM jobs
-                WHERE discovered_at::date = CURRENT_DATE
-            """)
-            applied_today = cur.fetchone()["count"]
-
-            cur.execute("SELECT COUNT(*) AS count FROM applications")
-            total_applications = cur.fetchone()["count"]
-
-            cur.execute("SELECT COUNT(*) AS count FROM companies")
-            total_companies = cur.fetchone()["count"]
-
-            cur.execute("""
-                SELECT COUNT(*) AS count FROM applications
-                WHERE status IN ('interview', 'offer')
-            """)
-            successful = cur.fetchone()["count"]
+        total_jobs = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
+        applied_today = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE date(discovered_at) = ?", (today,)
+        ).fetchone()[0]
+        total_applications = conn.execute("SELECT COUNT(*) FROM applications").fetchone()[0]
+        total_companies = conn.execute("SELECT COUNT(*) FROM companies").fetchone()[0]
+        successful = conn.execute(
+            "SELECT COUNT(*) FROM applications WHERE status IN ('interview', 'offer')"
+        ).fetchone()[0]
+        conn.close()
 
         success_rate = round(successful / total_applications * 100, 1) if total_applications else 0.0
-
-        conn.close()
         return {
             "stats": {
                 "total_jobs": total_jobs,
                 "applied_today": applied_today,
                 "total_applications": total_applications,
                 "total_companies": total_companies,
-                "success_rate": success_rate
+                "success_rate": success_rate,
             }
         }
     except Exception as e:
@@ -172,30 +141,29 @@ def get_stats():
                           "total_applications": 0, "total_companies": 0,
                           "success_rate": 0.0}}
 
+
 # ─────────────────────────────
 # APPLY TODAY
 # ─────────────────────────────
 @router.get("/apply-today")
 def apply_today():
     try:
+        today = datetime.date.today().isoformat()
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT j.job_title, j.company_name, j.job_url, j.status,
-                       a.applied_at, a.status AS app_status
-                FROM applications a
-                JOIN jobs j ON a.job_id = j.id
-                WHERE a.applied_at::date = CURRENT_DATE
-                ORDER BY a.applied_at DESC
-            """)
-            rows = [dict(r) for r in cur.fetchall()]
+        rows = conn.execute("""
+            SELECT j.job_title, j.company_name, j.job_url, j.status,
+                   a.applied_at, a.status AS app_status
+            FROM applications a
+            JOIN jobs j ON a.job_id = j.id
+            WHERE date(a.applied_at) = ?
+            ORDER BY a.applied_at DESC
+        """, (today,)).fetchall()
         conn.close()
-        return {"applications": rows, "count": len(rows),
-                "date": datetime.date.today().isoformat()}
+        return {"applications": [dict(r) for r in rows], "count": len(rows), "date": today}
     except Exception as e:
         logger.error(f"apply-today error: {e}")
-        return {"applications": [], "count": 0,
-                "date": datetime.date.today().isoformat()}
+        return {"applications": [], "count": 0, "date": datetime.date.today().isoformat()}
+
 
 # ─────────────────────────────
 # JOBS
@@ -207,7 +175,7 @@ def get_jobs(
     status: Optional[str] = None,
     company: Optional[str] = None,
     order_by: str = "discovered_at",
-    desc: bool = True
+    desc: bool = True,
 ):
     try:
         conn = get_conn()
@@ -215,32 +183,28 @@ def get_jobs(
         values = []
 
         if status:
-            filters.append("status = %s")
+            filters.append("status = ?")
             values.append(status)
         if company:
-            filters.append("company_name ILIKE %s")
+            filters.append("company_name LIKE ?")
             values.append(f"%{company}%")
 
         where = ("WHERE " + " AND ".join(filters)) if filters else ""
         direction = "DESC" if desc else "ASC"
         safe_order = order_by if order_by in ("discovered_at", "updated_at", "job_title", "company_name") else "discovered_at"
 
-        with conn.cursor() as cur:
-            cur.execute(f"""
-                SELECT * FROM jobs {where}
-                ORDER BY {safe_order} {direction}
-                LIMIT %s OFFSET %s
-            """, values + [limit, offset])
-            jobs = [dict(r) for r in cur.fetchall()]
-
-            cur.execute(f"SELECT COUNT(*) AS count FROM jobs {where}", values)
-            total = cur.fetchone()["count"]
-
+        jobs = conn.execute(
+            f"SELECT * FROM jobs {where} ORDER BY {safe_order} {direction} LIMIT ? OFFSET ?",
+            values + [limit, offset],
+        ).fetchall()
+        total = conn.execute(f"SELECT COUNT(*) FROM jobs {where}", values).fetchone()[0]
         conn.close()
-        return {"jobs": jobs, "total": total, "limit": limit, "offset": offset}
+
+        return {"jobs": [dict(r) for r in jobs], "total": total, "limit": limit, "offset": offset}
     except Exception as e:
         logger.error(f"Jobs error: {e}")
         return {"jobs": [], "total": 0, "limit": limit, "offset": offset}
+
 
 # ─────────────────────────────
 # APPLICATIONS
@@ -253,32 +217,30 @@ def get_applications(limit: int = 20, offset: int = 0, status: Optional[str] = N
         values = []
 
         if status:
-            filters.append("a.status = %s")
+            filters.append("a.status = ?")
             values.append(status)
 
         where = ("WHERE " + " AND ".join(filters)) if filters else ""
 
-        with conn.cursor() as cur:
-            cur.execute(f"""
-                SELECT a.*, j.job_title, j.company_name, j.job_url
-                FROM applications a
-                JOIN jobs j ON a.job_id = j.id
-                {where}
-                ORDER BY a.applied_at DESC
-                LIMIT %s OFFSET %s
-            """, values + [limit, offset])
-            apps = [dict(r) for r in cur.fetchall()]
+        apps = conn.execute(f"""
+            SELECT a.*, j.job_title, j.company_name, j.job_url
+            FROM applications a
+            JOIN jobs j ON a.job_id = j.id
+            {where}
+            ORDER BY a.applied_at DESC
+            LIMIT ? OFFSET ?
+        """, values + [limit, offset]).fetchall()
 
-            cur.execute(f"""
-                SELECT COUNT(*) AS count FROM applications a {where}
-            """, values)
-            total = cur.fetchone()["count"]
-
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM applications a {where}", values
+        ).fetchone()[0]
         conn.close()
-        return {"applications": apps, "total": total}
+
+        return {"applications": [dict(r) for r in apps], "total": total}
     except Exception as e:
         logger.error(f"Applications error: {e}")
         return {"applications": [], "total": 0}
+
 
 # ─────────────────────────────
 # FILES
@@ -294,9 +256,10 @@ def list_files():
             files.append({
                 "name": f.name,
                 "size": f.stat().st_size,
-                "modified": datetime.datetime.fromtimestamp(f.stat().st_mtime).isoformat()
+                "modified": datetime.datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
             })
     return {"files": files}
+
 
 @router.get("/files/{filename}")
 def get_file(filename: str):
@@ -309,6 +272,7 @@ def get_file(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(str(target))
 
+
 # ─────────────────────────────
 # RUN STATE
 # ─────────────────────────────
@@ -316,8 +280,9 @@ RUN_STATE = {
     "status": "idle",
     "run_id": None,
     "logs": [],
-    "queue": queue.Queue()
+    "queue": queue.Queue(),
 }
+
 
 # ─────────────────────────────
 # AGENT RUNNER
@@ -338,10 +303,10 @@ def run_agent_process(run_id: str, limit: int, dry_run: bool):
         text=True,
         cwd=BASE_DIR,
         bufsize=1,
-        env={**os.environ}
+        env={**os.environ},
     )
 
-    for line in iter(process.stdout.readline, ''):
+    for line in iter(process.stdout.readline, ""):
         clean = line.strip()
         if clean:
             RUN_STATE["logs"].append(clean)
@@ -351,6 +316,7 @@ def run_agent_process(run_id: str, limit: int, dry_run: bool):
     process.wait()
     RUN_STATE["status"] = "complete"
 
+
 # ─────────────────────────────
 # RUN ENDPOINT
 # ─────────────────────────────
@@ -358,6 +324,7 @@ class RunRequest(BaseModel):
     mode: str = "full"
     limit: Optional[int] = 5
     dry_run: bool = False
+
 
 @router.post("/run")
 def run_agent(req: RunRequest):
@@ -370,11 +337,12 @@ def run_agent(req: RunRequest):
     thread = threading.Thread(
         target=run_agent_process,
         args=(run_id, limit, req.dry_run),
-        daemon=True
+        daemon=True,
     )
     thread.start()
 
     return {"status": "running", "run_id": run_id}
+
 
 # ─────────────────────────────
 # RUN STATUS
@@ -384,8 +352,9 @@ def run_status():
     return {
         "status": RUN_STATE["status"],
         "run_id": RUN_STATE["run_id"],
-        "last_10_lines": RUN_STATE["logs"][-10:]
+        "last_10_lines": RUN_STATE["logs"][-10:],
     }
+
 
 # ─────────────────────────────
 # WEBSOCKET
@@ -398,19 +367,18 @@ async def websocket_logs(ws: WebSocket):
             while not RUN_STATE["queue"].empty():
                 msg = RUN_STATE["queue"].get()
                 await ws.send_text(msg)
-            await ws.send_text(json.dumps({
-                "type": "heartbeat",
-                "status": RUN_STATE["status"]
-            }))
+            await ws.send_text(json.dumps({"type": "heartbeat", "status": RUN_STATE["status"]}))
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         pass
+
 
 # ─────────────────────────────
 # JOB STATUS UPDATE
 # ─────────────────────────────
 class StatusUpdate(BaseModel):
     status: str
+
 
 @router.patch("/jobs/{job_id}/status")
 async def update_job_status(job_id: int, body: StatusUpdate):
@@ -420,32 +388,36 @@ async def update_job_status(job_id: int, body: StatusUpdate):
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {allowed}")
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE jobs SET status = %s, updated_at = NOW() WHERE id = %s RETURNING *",
-                (body.status, job_id)
-            )
-            job = cur.fetchone()
+        conn.execute(
+            "UPDATE jobs SET status = ?, updated_at = datetime('now') WHERE id = ?",
+            (body.status, job_id),
+        )
         conn.commit()
+        row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         conn.close()
-        if not job:
+        if not row:
             raise HTTPException(status_code=404, detail="Job not found")
-        return {"success": True, "job": dict(job)}
+        return {"success": True, "job": dict(row)}
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"update_job_status error: {e}")
         raise
 
+
 # ─────────────────────────────
 # FIT BREAKDOWN
 # ─────────────────────────────
-CANDIDATE_SUMMARY = (
-    "Tanzil Ahmed — MCA 2024, Java Full-Stack Developer & AI Engineer. "
-    "Skills: Python, Java, Spring Boot, FastAPI, React, PostgreSQL, Claude API, "
-    "LangChain, Docker basics, GCP, Azure. 2 data engineering internships. "
-    "Built Job Hunter AI and MixMaster AI."
-)
+from config import CANDIDATE_PROFILE, TARGET_ROLES, JOB_PREFERENCES
+
+def _build_candidate_summary() -> str:
+    name = CANDIDATE_PROFILE.get("name", "Candidate")
+    summary = CANDIDATE_PROFILE.get("summary", "")
+    roles = ", ".join(TARGET_ROLES[:4])
+    locs = ", ".join(JOB_PREFERENCES.get("locations", []))
+    return f"{name}. {summary} Target roles: {roles}. Locations: {locs}."
+
+CANDIDATE_SUMMARY = _build_candidate_summary()
 
 _FIT_PLACEHOLDER = {"skills": 0, "location": 0, "culture": 0, "seniority": 0, "missing": []}
 
@@ -455,32 +427,27 @@ async def get_fit_breakdown(job_id: int):
     from fastapi import HTTPException
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, job_title, company_name, location, description, fit_breakdown "
-                "FROM jobs WHERE id = %s",
-                (job_id,)
-            )
-            row = cur.fetchone()
+        row = conn.execute(
+            "SELECT id, job_title, company_name, location, description, fit_breakdown "
+            "FROM jobs WHERE id = ?", (job_id,)
+        ).fetchone()
         conn.close()
 
         if row is None:
             raise HTTPException(status_code=404, detail="Job not found")
 
         if row["fit_breakdown"]:
-            return {"fit_breakdown": row["fit_breakdown"]}
+            return {"fit_breakdown": json.loads(row["fit_breakdown"])}
 
-        # ── Generate via Claude Haiku ──
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            logger.warning("ANTHROPIC_API_KEY not set — returning placeholder")
             return {"fit_breakdown": _FIT_PLACEHOLDER}
 
-        job_description = row.get("description") or ""
+        job_description = row["description"] or ""
         user_prompt = (
             f"Job title: {row['job_title']}\n"
             f"Company: {row['company_name']}\n"
-            f"Location: {row.get('location') or 'Not specified'}\n"
+            f"Location: {row['location'] or 'Not specified'}\n"
             f"Description: {job_description[:2000]}\n\n"
             f"Candidate: {CANDIDATE_SUMMARY}\n\n"
             'Return ONLY a JSON object — no markdown, no explanation:\n'
@@ -491,7 +458,7 @@ async def get_fit_breakdown(job_id: int):
             import anthropic as _anthropic
             client = _anthropic.Anthropic(api_key=api_key)
             message = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=256,
                 system="You are a job fit analyzer. Given a job description and candidate profile, return ONLY valid JSON with no extra text.",
                 messages=[{"role": "user", "content": user_prompt}],
@@ -502,14 +469,12 @@ async def get_fit_breakdown(job_id: int):
             logger.error(f"Claude fit_breakdown call failed: {e}")
             return {"fit_breakdown": _FIT_PLACEHOLDER}
 
-        # ── Cache in DB ──
         try:
             conn = get_conn()
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE jobs SET fit_breakdown = %s WHERE id = %s",
-                    (json.dumps(breakdown), job_id)
-                )
+            conn.execute(
+                "UPDATE jobs SET fit_breakdown = ? WHERE id = ?",
+                (json.dumps(breakdown), job_id),
+            )
             conn.commit()
             conn.close()
         except Exception as e:
@@ -523,6 +488,7 @@ async def get_fit_breakdown(job_id: int):
         logger.error(f"fit_breakdown error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 # ─────────────────────────────
 # INTERVIEW PREP
 # ─────────────────────────────
@@ -534,28 +500,23 @@ async def get_interview_prep(job_id: int):
     from fastapi import HTTPException
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, job_title, company_name, description, interview_prep "
-                "FROM jobs WHERE id = %s",
-                (job_id,)
-            )
-            row = cur.fetchone()
+        row = conn.execute(
+            "SELECT id, job_title, company_name, description, interview_prep "
+            "FROM jobs WHERE id = ?", (job_id,)
+        ).fetchone()
         conn.close()
 
         if row is None:
             raise HTTPException(status_code=404, detail="Job not found")
 
         if row["interview_prep"]:
-            return {"interview_prep": row["interview_prep"]}
+            return {"interview_prep": json.loads(row["interview_prep"])}
 
-        # ── Generate via Claude Sonnet ──
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            logger.warning("ANTHROPIC_API_KEY not set — returning placeholder")
             return {"interview_prep": _INTERVIEW_PLACEHOLDER}
 
-        job_description = row.get("description") or ""
+        job_description = row["description"] or ""
         user_prompt = (
             f"Job title: {row['job_title']}\n"
             f"Company: {row['company_name']}\n"
@@ -573,13 +534,12 @@ async def get_interview_prep(job_id: int):
             import anthropic as _anthropic
             client = _anthropic.Anthropic(api_key=api_key)
             message = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-5",
                 max_tokens=2048,
-                system="You are an interview coach. Given a job description and candidate profile, generate interview prep material. Return ONLY valid JSON. Use \\n for newlines inside strings, never use actual newline characters inside JSON string values.",
+                system="You are an interview coach. Return ONLY valid JSON. Use \\n for newlines inside strings.",
                 messages=[{"role": "user", "content": user_prompt}],
             )
             raw = message.content[0].text.strip()
-            # Strip markdown fences
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[-1]
             if raw.endswith("```"):
@@ -587,7 +547,6 @@ async def get_interview_prep(job_id: int):
             prep = json.loads(raw)
         except json.JSONDecodeError as je:
             logger.error(f"interview_prep JSON parse failed: {je}")
-            # Try to salvage — replace unescaped newlines in string values
             import re
             try:
                 cleaned = re.sub(r'(?<=": ")(.*?)(?="[,\}])', lambda m: m.group(0).replace('\n', '\\n'), raw, flags=re.DOTALL)
@@ -599,14 +558,12 @@ async def get_interview_prep(job_id: int):
             logger.error(f"Claude interview_prep call failed: {e}")
             return {"interview_prep": _INTERVIEW_PLACEHOLDER}
 
-        # ── Cache in DB ──
         try:
             conn = get_conn()
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE jobs SET interview_prep = %s WHERE id = %s",
-                    (json.dumps(prep), job_id)
-                )
+            conn.execute(
+                "UPDATE jobs SET interview_prep = ? WHERE id = ?",
+                (json.dumps(prep), job_id),
+            )
             conn.commit()
             conn.close()
         except Exception as e:
@@ -619,6 +576,7 @@ async def get_interview_prep(job_id: int):
     except Exception as e:
         logger.error(f"interview_prep error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
 
 # ─────────────────────────────
 # ONBOARDING
@@ -637,13 +595,18 @@ class OnboardingRequest(BaseModel):
 async def get_onboarding():
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT * FROM user_profile ORDER BY id DESC LIMIT 1")
-            row = cur.fetchone()
+        row = conn.execute("SELECT * FROM user_profile ORDER BY id DESC LIMIT 1").fetchone()
         conn.close()
         if not row:
             return {"profile": None}
-        return {"profile": dict(row)}
+        d = dict(row)
+        for field in ("job_categories", "preferred_locations", "preferences"):
+            if isinstance(d.get(field), str):
+                try:
+                    d[field] = json.loads(d[field])
+                except Exception:
+                    pass
+        return {"profile": d}
     except Exception as e:
         logger.error(f"get_onboarding error: {e}")
         return {"profile": None}
@@ -653,25 +616,23 @@ async def get_onboarding():
 async def save_onboarding(body: OnboardingRequest):
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM user_profile")
-            cur.execute(
-                """INSERT INTO user_profile
-                   (name, experience_level, job_categories, preferred_locations, skills, resume_text, preferences)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s)
-                   RETURNING *""",
-                (
-                    body.name,
-                    body.experience_level,
-                    json.dumps(body.job_categories),
-                    json.dumps(body.preferred_locations),
-                    body.skills,
-                    body.resume_text,
-                    json.dumps(body.preferences),
-                )
-            )
-            row = dict(cur.fetchone())
+        conn.execute("DELETE FROM user_profile")
+        conn.execute(
+            """INSERT INTO user_profile
+               (name, experience_level, job_categories, preferred_locations, skills, resume_text, preferences)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                body.name,
+                body.experience_level,
+                json.dumps(body.job_categories),
+                json.dumps(body.preferred_locations),
+                body.skills,
+                body.resume_text,
+                json.dumps(body.preferences),
+            ),
+        )
         conn.commit()
+        row = conn.execute("SELECT * FROM user_profile ORDER BY id DESC LIMIT 1").fetchone()
         conn.close()
 
         global CANDIDATE_SUMMARY
@@ -683,7 +644,7 @@ async def save_onboarding(body: OnboardingRequest):
         )
         logger.info(f"CANDIDATE_SUMMARY updated for {body.name}")
 
-        return {"success": True, "profile": row}
+        return {"success": True, "profile": dict(row)}
     except Exception as e:
         logger.error(f"save_onboarding error: {e}")
         from fastapi import HTTPException
@@ -700,9 +661,9 @@ _SKILL_GAP_EMPTY = {"skills": [], "summary": "Run fit scores on more jobs to see
 async def get_skill_gap():
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT fit_breakdown FROM jobs WHERE fit_breakdown IS NOT NULL")
-            rows = cur.fetchall()
+        rows = conn.execute(
+            "SELECT fit_breakdown FROM jobs WHERE fit_breakdown IS NOT NULL"
+        ).fetchall()
         conn.close()
     except Exception as e:
         logger.error(f"skill-gap DB error: {e}")
@@ -711,7 +672,6 @@ async def get_skill_gap():
     if not rows:
         return {"skill_gap": _SKILL_GAP_EMPTY}
 
-    # Tally missing skills across all fit breakdowns
     skill_counts: dict = {}
     for row in rows:
         fb = row["fit_breakdown"]
@@ -731,14 +691,13 @@ async def get_skill_gap():
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
-        logger.warning("ANTHROPIC_API_KEY not set — returning basic skill gap")
         return {"skill_gap": _SKILL_GAP_EMPTY}
 
     skills_text = "\n".join(f"- {name}: appeared in {count} job(s)" for name, count in top_skills)
     user_prompt = (
         f"Candidate: {CANDIDATE_SUMMARY}\n\n"
         f"Top missing skills from {len(rows)} job fit analyses:\n{skills_text}\n\n"
-        "For each skill, estimate demand_score (0-10, how often it appears) and your_score (0-10, candidate's current level). "
+        "For each skill, estimate demand_score (0-10) and your_score (0-10, candidate's current level). "
         "Include a real learning resource URL and name. Return ONLY a JSON object:\n"
         '{"skills": [{"name": "...", "demand_score": 0-10, "your_score": 0-10, '
         '"resource_url": "https://...", "resource_name": "..."}], '
@@ -749,9 +708,9 @@ async def get_skill_gap():
         import anthropic as _anthropic
         client = _anthropic.Anthropic(api_key=api_key)
         message = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5",
             max_tokens=1024,
-            system="You are a career skills analyst. Analyze skill gaps and suggest resources. Return ONLY valid JSON.",
+            system="You are a career skills analyst. Return ONLY valid JSON.",
             messages=[{"role": "user", "content": user_prompt}],
         )
         raw = message.content[0].text.strip()
@@ -774,21 +733,19 @@ async def get_skill_gap():
 async def ghost_detector():
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT DISTINCT ON (j.id)
-                    j.id, j.job_title, j.company_name, j.job_url,
-                    EXTRACT(DAY FROM NOW() - a.applied_at)::int AS days_since_applied
-                FROM jobs j
-                JOIN applications a ON a.job_id = j.id
-                WHERE j.status = 'applied'
-                  AND j.rejection_reason IS NULL
-                  AND a.applied_at < NOW() - INTERVAL '7 days'
-                ORDER BY j.id, a.applied_at ASC
-            """)
-            rows = [dict(r) for r in cur.fetchall()]
+        rows = conn.execute("""
+            SELECT j.id, j.job_title, j.company_name, j.job_url,
+                   CAST(julianday('now') - julianday(a.applied_at) AS INTEGER) AS days_since_applied
+            FROM jobs j
+            JOIN applications a ON a.job_id = j.id
+            WHERE j.status = 'applied'
+              AND j.rejection_reason IS NULL
+              AND julianday('now') - julianday(a.applied_at) > 7
+            GROUP BY j.id
+            ORDER BY a.applied_at ASC
+        """).fetchall()
         conn.close()
-        return {"ghosted_jobs": rows, "total": len(rows)}
+        return {"ghosted_jobs": [dict(r) for r in rows], "total": len(rows)}
     except Exception as e:
         logger.error(f"ghost-detector error: {e}")
         return {"ghosted_jobs": [], "total": 0}
@@ -799,17 +756,14 @@ async def generate_follow_up(job_id: int):
     from fastapi import HTTPException
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT j.id, j.job_title, j.company_name, "
-                "EXTRACT(DAY FROM NOW() - a.applied_at)::int AS days_since_applied "
-                "FROM jobs j "
-                "JOIN applications a ON a.job_id = j.id "
-                "WHERE j.id = %s "
-                "ORDER BY a.applied_at ASC LIMIT 1",
-                (job_id,)
-            )
-            row = cur.fetchone()
+        row = conn.execute("""
+            SELECT j.id, j.job_title, j.company_name,
+                   CAST(julianday('now') - julianday(a.applied_at) AS INTEGER) AS days_since_applied
+            FROM jobs j
+            JOIN applications a ON a.job_id = j.id
+            WHERE j.id = ?
+            ORDER BY a.applied_at ASC LIMIT 1
+        """, (job_id,)).fetchone()
         conn.close()
 
         if row is None:
@@ -833,9 +787,9 @@ async def generate_follow_up(job_id: int):
             import anthropic as _anthropic
             client = _anthropic.Anthropic(api_key=api_key)
             message = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-5",
                 max_tokens=512,
-                system="You are a professional career coach. Write a polite follow-up email for a job application. Return ONLY valid JSON.",
+                system="You are a professional career coach. Write a polite follow-up email. Return ONLY valid JSON.",
                 messages=[{"role": "user", "content": user_prompt}],
             )
             raw = message.content[0].text.strip()
@@ -868,19 +822,11 @@ class RejectionRequest(BaseModel):
 @router.post("/jobs/{job_id}/rejection")
 async def submit_rejection(job_id: int, body: RejectionRequest):
     from fastapi import HTTPException
-    try:
-        conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT id FROM jobs WHERE id = %s", (job_id,))
-            if not cur.fetchone():
-                conn.close()
-                raise HTTPException(status_code=404, detail="Job not found")
-        conn.close()
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"rejection lookup error: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+    conn = get_conn()
+    row = conn.execute("SELECT id FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Job not found")
 
     if body.ghost:
         reason = {"category": "ghost", "confidence": 1.0, "explanation": "No response received"}
@@ -903,9 +849,9 @@ async def submit_rejection(job_id: int, body: RejectionRequest):
                 import anthropic as _anthropic
                 client = _anthropic.Anthropic(api_key=api_key)
                 message = client.messages.create(
-                    model="claude-sonnet-4-20250514",
+                    model="claude-haiku-4-5-20251001",
                     max_tokens=256,
-                    system="You are a job rejection analyzer. Classify why this candidate was rejected. Return ONLY valid JSON.",
+                    system="You are a job rejection analyzer. Return ONLY valid JSON.",
                     messages=[{"role": "user", "content": user_prompt}],
                 )
                 raw = message.content[0].text.strip()
@@ -918,18 +864,13 @@ async def submit_rejection(job_id: int, body: RejectionRequest):
                 logger.error(f"Claude rejection call failed: {e}")
                 reason = {"category": "other", "confidence": 0.5, "explanation": "Analysis failed"}
 
-    try:
-        conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE jobs SET status='rejected', rejection_text=%s, rejection_reason=%s, updated_at=NOW() WHERE id=%s",
-                (body.text, json.dumps(reason), job_id)
-            )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.error(f"rejection DB write failed: {e}")
-
+    conn = get_conn()
+    conn.execute(
+        "UPDATE jobs SET status='rejected', rejection_text=?, rejection_reason=?, updated_at=datetime('now') WHERE id=?",
+        (body.text, json.dumps(reason), job_id),
+    )
+    conn.commit()
+    conn.close()
     return {"rejection_reason": reason}
 
 
@@ -937,9 +878,9 @@ async def submit_rejection(job_id: int, body: RejectionRequest):
 async def get_rejection_patterns():
     try:
         conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("SELECT rejection_reason FROM jobs WHERE rejection_reason IS NOT NULL")
-            rows = cur.fetchall()
+        rows = conn.execute(
+            "SELECT rejection_reason FROM jobs WHERE rejection_reason IS NOT NULL"
+        ).fetchall()
         conn.close()
     except Exception as e:
         logger.error(f"rejection-patterns DB error: {e}")
@@ -974,7 +915,7 @@ async def get_rejection_patterns():
                 import anthropic as _anthropic
                 client = _anthropic.Anthropic(api_key=api_key)
                 message = client.messages.create(
-                    model="claude-sonnet-4-20250514",
+                    model="claude-haiku-4-5-20251001",
                     max_tokens=256,
                     system="You are a career coach analyzing job rejection patterns. Return ONLY valid JSON.",
                     messages=[{"role": "user", "content": meta_prompt}],
@@ -989,6 +930,7 @@ async def get_rejection_patterns():
                 logger.error(f"Claude meta-analysis failed: {e}")
 
     return {"total": total, "by_category": by_category, "meta_analysis": meta_analysis}
+
 
 # ─────────────────────────────
 # INCLUDE ROUTER

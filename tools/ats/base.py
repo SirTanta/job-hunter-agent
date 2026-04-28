@@ -32,9 +32,9 @@ class BaseATSHandler:
     Base class for all ATS handlers.
 
     Subclasses should override:
-      - apply(page, job, cv_path, cover_path) — main entry point
+      - apply(page, job, resume_path, cover_path) — main entry point
       - _find_apply_button(page) — locate the initial apply button
-      - _fill_form(page, cv_path, cover_path) — ATS-specific field filling
+      - _fill_form(page, resume_path, cover_path) — ATS-specific field filling
     """
 
     def __init__(self, tracker=None):
@@ -47,7 +47,7 @@ class BaseATSHandler:
     # Public entry point (called by AutoApplier)
     # ------------------------------------------------------------------
 
-    def submit(self, page, job: dict, cv_path: Optional[Path],
+    def submit(self, page, job: dict, resume_path: Optional[Path],
                cover_path: Optional[Path]) -> dict:
         """
         Attempt to submit an application on the given page.
@@ -218,15 +218,15 @@ Return ONLY the answer — no explanation, no labels, no punctuation wrapper."""
             "input[placeholder*='location' i]",
         ], "Rio Rancho, NM")
 
-    def upload_resume(self, page, cv_path: Optional[Path]) -> bool:
+    def upload_resume(self, page, resume_path: Optional[Path]) -> bool:
         """Upload resume to file input. Returns True if uploaded."""
-        if not cv_path or not Path(cv_path).exists():
+        if not resume_path or not Path(resume_path).exists():
             return False
         upload = page.query_selector("input[type='file']")
         if upload:
-            upload.set_input_files(str(cv_path))
+            upload.set_input_files(str(resume_path))
             time.sleep(1)
-            print(f"[ats] Resume uploaded: {cv_path.name if hasattr(cv_path, 'name') else cv_path}")
+            print(f"[ats] Resume uploaded: {resume_path.name if hasattr(resume_path, 'name') else resume_path}")
             return True
         return False
 

@@ -15,7 +15,7 @@ Generic Claude-powered handler covers everything else:
 
 Usage:
     applier = AutoApplier(tracker)
-    result = applier.apply(job, cv_path, cover_path, company_profile)
+    result = applier.apply(job, resume_path, cover_path, company_profile)
 """
 
 import os
@@ -42,7 +42,7 @@ class AutoApplier:
     # Public entry point
     # ------------------------------------------------------------------
 
-    def apply(self, job: dict, cv_path: Optional[Path] = None,
+    def apply(self, job: dict, resume_path: Optional[Path] = None,
               cover_path: Optional[Path] = None,
               company_profile: Optional[dict] = None) -> dict:
         """
@@ -105,7 +105,7 @@ class AutoApplier:
                     email_monitor=monitor,
                 )
 
-                result = handler.submit(page, job, cv_path, cover_path)
+                result = handler.submit(page, job, resume_path, cover_path)
                 browser.close()
 
         except Exception as e:

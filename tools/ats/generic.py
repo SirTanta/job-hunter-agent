@@ -36,7 +36,7 @@ class GenericHandler(BaseATSHandler):
         super().__init__(tracker=tracker)
         self.ats_name = ats_name
 
-    def submit(self, page, job: dict, cv_path: Optional[Path],
+    def submit(self, page, job: dict, resume_path: Optional[Path],
                cover_path: Optional[Path]) -> dict:
         url = job.get("url", "")
         print(f"[{self.ats_name}] Generic handler for {url}")
@@ -53,7 +53,7 @@ class GenericHandler(BaseATSHandler):
             self.fill_standard_fields(page)
 
             # Upload resume
-            self.upload_resume(page, cv_path)
+            self.upload_resume(page, resume_path)
 
             # Cover letter
             self.fill_cover_letter(page, cover_path)

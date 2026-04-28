@@ -10,7 +10,7 @@ from tools.ats.base import BaseATSHandler, _docx_to_text
 
 class LinkedInHandler(BaseATSHandler):
 
-    def submit(self, page, job: dict, cv_path: Optional[Path],
+    def submit(self, page, job: dict, resume_path: Optional[Path],
                cover_path: Optional[Path]) -> dict:
         url = job.get("url", "")
         li_at = os.environ.get("LINKEDIN_LI_AT", "")
@@ -38,7 +38,7 @@ class LinkedInHandler(BaseATSHandler):
             time.sleep(1)
 
             self.fill_standard_fields(page)
-            self.upload_resume(page, cv_path)
+            self.upload_resume(page, resume_path)
 
             if cover_path:
                 cover_text = _docx_to_text(cover_path)

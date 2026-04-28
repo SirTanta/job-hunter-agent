@@ -9,7 +9,7 @@ Pipeline for each company:
   Step 5  — send everything to Claude Haiku for structured analysis
   Step 6  — save the profile via tracker.save_company()
 
-The final output is a dict that cv_customizer and cover_letter can
+The final output is a dict that resume_optimizer and cover_letter can
 directly consume to tailor documents.
 """
 
@@ -42,9 +42,11 @@ def _build_candidate_summary() -> str:
     roles = ", ".join(TARGET_ROLES)
     locations = ", ".join(JOB_PREFERENCES.get("locations", []))
     work_modes = ", ".join(CANDIDATE_PROFILE.get("preferred_work_mode", []))
+    summary = CANDIDATE_PROFILE.get("summary", "")
     return (
         f"Name: {CANDIDATE_PROFILE['name']}\n"
         f"Location: {CANDIDATE_PROFILE['location']}\n"
+        f"Summary: {summary}\n"
         f"Skills:\n{skill_lines}\n"
         f"Target roles: {roles}\n"
         f"Preference: {work_modes}, {locations}"
@@ -335,12 +337,13 @@ class CompanyResearcher:
             response = self.exa.search_and_contents(
                 query=query,
                 num_results=5,
-                text=True,
+                contents={"highlights": {"max_characters": 4000}},
             )
             parts = []
             for r in response.results:
                 title = getattr(r, "title", "") or ""
-                text  = getattr(r, "text", "")  or ""
+                highlights = getattr(r, "highlights", None) or []
+                text = " ".join(highlights) if isinstance(highlights, list) else str(highlights)
                 snippet = f"[{title}] {text[:400]}"
                 parts.append(snippet)
             return "\n\n".join(parts)[:MAX_CHARS_PER_SOURCE]
@@ -413,6 +416,9 @@ class CompanyResearcher:
         If Claude fails or returns unparseable JSON we return a safe fallback
         dict so the pipeline can continue.
         """
+        candidate_name = CANDIDATE_PROFILE.get("name", "the candidate")
+        default_role = TARGET_ROLES[0] if TARGET_ROLES else "the target role"
+
         prompt = f"""
 You are a job-search assistant analysing a company for a candidate.
 
@@ -420,7 +426,7 @@ CANDIDATE PROFILE:
 {CANDIDATE_SUMMARY}
 
 COMPANY NAME: {company_name}
-JOB TITLE BEING APPLIED FOR: {job_title or "Software Engineer"}
+JOB TITLE BEING APPLIED FOR: {job_title or default_role}
 
 RESEARCH DATA
 =============
@@ -454,8 +460,8 @@ Return ONLY the JSON — no markdown, no explanation, no code fences.
   "company_size":     "one of: startup / mid / large / MNC",
   "culture_score":    integer 1-10 (10 = excellent culture signals),
   "red_flags":        ["list any concerns: layoffs, bad reviews, no growth, etc — empty list if none"],
-  "why_apply":        "2-3 sentence pitch Tanzil can use in his cover letter explaining why this company excites him",
-  "fit_score":        integer 1-10 (10 = perfect match for Tanzil's skills and goals)
+  "why_apply":        "2-3 sentence pitch {candidate_name} can use in the cover letter explaining why this company is a compelling fit",
+  "fit_score":        integer 1-10 (10 = perfect match for the candidate's skills and goals)
 }}
 """
         try:

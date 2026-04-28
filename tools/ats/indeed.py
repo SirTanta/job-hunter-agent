@@ -10,7 +10,7 @@ from tools.ats.base import BaseATSHandler
 
 class IndeedHandler(BaseATSHandler):
 
-    def submit(self, page, job: dict, cv_path: Optional[Path],
+    def submit(self, page, job: dict, resume_path: Optional[Path],
                cover_path: Optional[Path]) -> dict:
         url = job.get("url", "")
         session = os.environ.get("INDEED_SESSION", "")
@@ -43,7 +43,7 @@ class IndeedHandler(BaseATSHandler):
             time.sleep(2)
 
             self.fill_standard_fields(page)
-            self.upload_resume(page, cv_path)
+            self.upload_resume(page, resume_path)
             self.fill_cover_letter(page, cover_path)
             self.answer_all_visible_questions(page)
 

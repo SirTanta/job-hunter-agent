@@ -15,7 +15,7 @@ from tools.ats.base import BaseATSHandler
 
 class AshbyHandler(BaseATSHandler):
 
-    def submit(self, page, job: dict, cv_path: Optional[Path],
+    def submit(self, page, job: dict, resume_path: Optional[Path],
                cover_path: Optional[Path]) -> dict:
         url = job.get("url", "")
         print(f"[ashby] Applying at {url}")
@@ -38,7 +38,7 @@ class AshbyHandler(BaseATSHandler):
             self.fill_standard_fields(page)
 
             # Resume upload
-            self.upload_resume(page, cv_path)
+            self.upload_resume(page, resume_path)
 
             # Cover letter (Ashby has an optional cover letter text area)
             self.fill_cover_letter(page, cover_path)

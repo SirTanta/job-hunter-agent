@@ -8,7 +8,7 @@ load_dotenv()
 from tools.auto_apply import AutoApplier
 from tools.company_research import CompanyResearcher
 from tools.cover_letter import CoverLetterWriter
-from tools.cv_customizer import CVCustomizer
+from tools.resume_optimizer import ResumeOptimizer
 from tools.job_finder import JobFinder
 from tools.notion_tracker import NotionTracker
 from tools.tracker import JobTracker
@@ -40,7 +40,7 @@ class JobHunterAgent:
         self.notion  = NotionTracker()
         self.job_finder = JobFinder()
         self.researcher = CompanyResearcher(tracker=self.tracker)
-        self.cv_customizer = CVCustomizer()
+        self.resume_optimizer = ResumeOptimizer()
         self.cover_writer = CoverLetterWriter()
         self.applier = AutoApplier(tracker=self.tracker)
 
@@ -86,21 +86,21 @@ class JobHunterAgent:
                     job_title=job.get("title")
                 )
 
-                # Generate tailored CV + cover letter (skip if dry run)
+                # Generate tailored resume + cover letter (skip if dry run)
                 if not self.dry_run:
-                    cv_path = self.cv_customizer.customise(job, profile)
-                    cover_path = self.cover_writer.write(job, profile, cv_path)
+                    resume_path = self.resume_optimizer.customise(job, profile)
+                    cover_path = self.cover_writer.write(job, profile, resume_path)
                     self.tracker.save_application(
                         job_id=job_id,
                         company_id=profile.get("db_id"),
-                        cv_path=str(cv_path),
+                        resume_path=str(resume_path),
                         cover_path=str(cover_path),
                     )
                     self._stats["applications_saved"] += 1
 
                     # Auto-apply if enabled
                     if self.auto_apply:
-                        result = self.applier.apply(job, cv_path, cover_path, profile)
+                        result = self.applier.apply(job, resume_path, cover_path, profile)
                         if result["success"]:
                             self._stats["auto_applied"] += 1
                         elif result["method"] == "manual":
@@ -112,7 +112,7 @@ class JobHunterAgent:
                             job=job,
                             apply_result=result,
                             company_profile=profile,
-                            cv_path=str(cv_path),
+                            resume_path=str(resume_path),
                         )
                     else:
                         # Generate-only mode — still log to Notion as "Applied"
@@ -120,7 +120,7 @@ class JobHunterAgent:
                             job=job,
                             apply_result={"success": True, "method": "generated", "job_url": job.get("url", "")},
                             company_profile=profile,
-                            cv_path=str(cv_path),
+                            resume_path=str(resume_path),
                         )
 
                 self._stats["jobs_processed"] += 1
@@ -137,7 +137,7 @@ class JobHunterAgent:
 def _parse_args():
     parser = argparse.ArgumentParser(description="Job Hunter Agent")
     parser.add_argument("--dry-run", action="store_true",
-                        help="Find and research jobs only — no CV generation or applying")
+                        help="Find and research jobs only — no resume generation or applying")
     parser.add_argument("--max", type=int, help="Max number of jobs to process")
     parser.add_argument("--top", type=int, help="Process only the top N jobs by fit score")
     parser.add_argument("--auto-apply", action="store_true",

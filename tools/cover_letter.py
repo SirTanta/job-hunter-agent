@@ -3,9 +3,9 @@ tools/cover_letter.py — Generates a personalised cover letter for each applica
 
 Pipeline:
   1. Load base template from templates/cover_letter_base.txt
-  2. Read the tailored CV content (already written by cv_customizer) for context
-  3. Build a detailed Claude prompt: JD + company profile + CV content + rules
-  4. Call Claude Sonnet — same model as CV, quality matters
+  2. Read the tailored resume content (already written by resume_optimizer) for context
+  3. Build a detailed Claude prompt: JD + company profile + resume content + rules
+  4. Call Claude Sonnet — same model as resume, quality matters
   5. Hydrate the letter with real contact info from .env
   6. Render to a clean, professional .docx via python-docx
   7. Return the file path for the tracker
@@ -37,9 +37,9 @@ load_dotenv()
 BASE_TEMPLATE_PATH = Path("templates/cover_letter_base.txt")
 OUTPUT_DIR         = Path(OUTPUT_CONFIG["output_dir"])
 
-SONNET_MODEL = "claude-sonnet-4-5"
+SONNET_MODEL = "claude-sonnet-4-5-20251001"
 
-# Max chars we pull from the tailored CV to give Claude context
+# Max chars we pull from the tailored resume to give Claude context
 MAX_CV_CHARS = 3000
 
 
@@ -49,7 +49,7 @@ class CoverLetterWriter:
 
     Usage:
         writer = CoverLetterWriter()
-        path = writer.write(job, company_profile, cv_path)
+        path = writer.write(job, company_profile, resume_path)
     """
 
     def __init__(self):
@@ -65,7 +65,7 @@ class CoverLetterWriter:
     # ------------------------------------------------------------------
 
     def write(self, job: dict, company_profile: Optional[dict] = None,
-              cv_path: Optional[Path] = None) -> Path:
+              resume_path: Optional[Path] = None) -> Path:
         """
         Generate a tailored cover letter .docx for the given job and company.
 
@@ -74,8 +74,8 @@ class CoverLetterWriter:
                               description, location, url
             company_profile : dict from company_researcher — used to personalise
                               paragraph 1 with real company-specific facts
-            cv_path         : Path to the tailored CV .docx produced by
-                              cv_customizer — we read its text to mirror
+            resume_path         : Path to the tailored resume .docx produced by
+                              resume_optimizer — we read its text to mirror
                               the same keywords Claude chose there
 
         Returns:
@@ -91,8 +91,8 @@ class CoverLetterWriter:
         # Step 1 — load template (used for fallback and contact hydration)
         template = self._load_base_template()
 
-        # Step 2 — read tailored CV text for keyword context
-        cv_text = self._read_cv_text(cv_path) if cv_path else ""
+        # Step 2 — read tailored resume text for keyword context
+        cv_text = self._read_cv_text(resume_path) if resume_path else ""
 
         # Step 3 — call Claude
         letter_body = self._call_claude(
@@ -138,13 +138,13 @@ class CoverLetterWriter:
     # _read_cv_text
     # ------------------------------------------------------------------
 
-    def _read_cv_text(self, cv_path: Path) -> str:
+    def _read_cv_text(self, resume_path: Path) -> str:
         """
-        Extract plain text from the tailored CV .docx that cv_customizer produced.
+        Extract plain text from the tailored resume .docx that resume_optimizer produced.
 
-        Why we read the CV:
+        Why we read the resume:
           Claude already chose specific keywords and action verbs when writing
-          the CV. The cover letter should echo the same language so both
+          the resume. The cover letter should echo the same language so both
           documents feel cohesive — an ATS and a recruiter reading both will
           see consistent terminology.
 
@@ -153,15 +153,15 @@ class CoverLetterWriter:
 
         Returns empty string if the file is missing or unreadable.
         """
-        if not cv_path or not Path(cv_path).exists():
+        if not resume_path or not Path(resume_path).exists():
             return ""
         try:
-            doc   = Document(str(cv_path))
+            doc   = Document(str(resume_path))
             lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
             text  = "\n".join(lines)
             return text[:MAX_CV_CHARS]
         except Exception as e:
-            print(f"[cover_letter] Could not read CV file ({cv_path}): {e}")
+            print(f"[cover_letter] Could not read resume file ({resume_path}): {e}")
             return ""
 
     # ------------------------------------------------------------------
@@ -175,7 +175,7 @@ class CoverLetterWriter:
 
         Prompt structure:
           [Role description] → [Candidate facts] → [Job details] →
-          [Company research] → [CV keywords] → [Template] → [Rules]
+          [Company research] → [resume keywords] → [Template] → [Rules]
 
         Key design choices:
           - We pass the base template so Claude understands the expected
@@ -230,9 +230,9 @@ COMPANY RESEARCH:
 {company_block}
 
 ============================
-TAILORED CV CONTENT (keywords to echo):
+TAILORED RESUME CONTENT (keywords to echo):
 ============================
-{cv_text or "(CV not available — use job description keywords instead)"}
+{cv_text or "(resume not available — use job description keywords instead)"}
 
 ============================
 BASE TEMPLATE STRUCTURE (for reference):
@@ -257,8 +257,8 @@ PARAGRAPH 1 — Why THIS company (60-80 words):
 
 PARAGRAPH 2 — Why Tanzil is the perfect fit (140-160 words):
   - Mirror 3-4 exact keywords or phrases from the job description.
-  - Connect each keyword to a specific skill or achievement from the CV.
-  - Include at least one quantified result if the CV provides one.
+  - Connect each keyword to a specific skill or achievement from the resume.
+  - Include at least one quantified result if the resume provides one.
   - Do NOT list skills robotically ("I have X, I have Y") — weave them
     into sentences that tell a story of what Tanzil built and achieved.
 
@@ -417,7 +417,7 @@ DO NOT use these clichés: "I am writing to", "passion for", "team player",
 
         Format: cover_[company]_[role]_[YYYY-MM-DD].docx
 
-        Uses the same slugify logic as cv_customizer so both files for the
+        Uses the same slugify logic as resume_optimizer so both files for the
         same application sort together in the output/ folder:
           cv_thoughtworks_associate_software_engineer_2026-03-31.docx
           cover_thoughtworks_associate_software_engineer_2026-03-31.docx
@@ -442,7 +442,7 @@ DO NOT use these clichés: "I am writing to", "passion for", "team player",
         Render the assembled cover letter into a clean, professional .docx.
 
         Layout decisions:
-          - Same margins and font family as the CV (Calibri) for brand consistency
+          - Same margins and font family as the resume (Calibri) for brand consistency
           - Date: right-aligned, 10pt
           - Subject line: bold, 11pt — makes it easy to scan in an inbox
           - Salutation: normal, with extra space below

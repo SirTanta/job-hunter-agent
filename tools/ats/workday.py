@@ -28,7 +28,7 @@ class WorkdayHandler(BaseATSHandler):
         self.email_monitor = email_monitor
         self.login_mgr = ATSLoginManager(email_monitor=email_monitor)
 
-    def submit(self, page, job: dict, cv_path: Optional[Path],
+    def submit(self, page, job: dict, resume_path: Optional[Path],
                cover_path: Optional[Path]) -> dict:
         url = job.get("url", "")
         ctx = page.context
@@ -68,11 +68,11 @@ class WorkdayHandler(BaseATSHandler):
             app_page = self._handle_auth_flow(app_page, ctx, url)
 
             # ── Resume upload (Workday parses it to pre-fill fields) ──
-            self.upload_resume(app_page, cv_path)
+            self.upload_resume(app_page, resume_path)
             time.sleep(2)
 
             # ── Step-by-step wizard ───────────────────────────────────
-            submitted = self._workday_wizard(app_page, ctx, cv_path, cover_path)
+            submitted = self._workday_wizard(app_page, ctx, resume_path, cover_path)
 
             if submitted:
                 return self._success("workday", url)
@@ -178,7 +178,7 @@ class WorkdayHandler(BaseATSHandler):
     # Wizard loop
     # ------------------------------------------------------------------
 
-    def _workday_wizard(self, page, ctx, cv_path, cover_path,
+    def _workday_wizard(self, page, ctx, resume_path, cover_path,
                         max_steps: int = 20) -> bool:
         """
         Navigate Workday's step wizard.
