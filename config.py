@@ -3,7 +3,7 @@
 CANDIDATE_PROFILE = {
     "name": "Jon Edwards, M.Ed",
     "location": "Rio Rancho, NM, USA",
-    "email": "jedwar82@gmail.com",
+    "email": "jon.edwards.jobs@outlook.com",
     "phone": "+1 (505) 514-2800",
     "linkedin": "linkedin.com/in/jedwar82/",
     "github": "",
