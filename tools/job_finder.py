@@ -44,7 +44,21 @@ AGGREGATOR_DOMAINS = {
     "dice.com", "hired.com", "wellfound.com", "angel.co",
     "builtin.com", "themuse.com", "flexjobs.com", "remote.co",
     "naukri.com", "timesjobs.com", "shine.com",
+    # Additional aggregators/listing sites identified from live runs
+    "remoterocketship.com", "expertini.com", "irvinetechcorp.com",
+    "gofractional.com", "insightpartners.com", "edtech.com",
+    "jooble.org", "jobgether.com", "talent.com", "jobsora.com",
 }
+
+# URL path patterns that indicate a listing/category page, not a job post.
+LISTING_PATH_PATTERNS = [
+    r"/jobs/$",
+    r"/jobs/[a-z0-9-]+/$",
+    r"/jobs/[a-z0-9-]+/[a-z0-9-]+/$",
+    r"/careers/$",
+    r"/openings/$",
+    r"/positions/$",
+]
 
 # Domains that ARE direct ATS pages (we want these)
 ATS_DOMAINS = {
@@ -57,6 +71,17 @@ ATS_DOMAINS = {
 def _is_aggregator(url: str) -> bool:
     host = urlparse(url).hostname or ""
     return any(agg in host for agg in AGGREGATOR_DOMAINS)
+
+
+def _is_listing_page(url: str) -> bool:
+    """True if URL points to a job listing/category page, not an individual posting."""
+    if not url:
+        return False
+    path = urlparse(url).path.lower().rstrip("/") + "/"
+    for pattern in LISTING_PATH_PATTERNS:
+        if re.search(pattern, path):
+            return True
+    return False
 
 
 def _is_direct(url: str) -> bool:
@@ -158,6 +183,14 @@ class JobFinder:
         # Deduplicate by URL
         jobs = self._deduplicate(jobs)
 
+        # Filter out aggregator domains and listing pages (category pages, not individual jobs)
+        before = len(jobs)
+        jobs = [j for j in jobs
+                if not _is_aggregator(j.get("url", ""))
+                and not _is_listing_page(j.get("url", ""))]
+        if len(jobs) < before:
+            print(f"[job_finder] Filtered {before - len(jobs)} aggregator/listing-page URLs")
+
         # Filter by freshness
         jobs = [j for j in jobs if _age_hours(j.get("posted_date", "")) <= cutoff_hours
                 or j.get("posted_date") == ""]
@@ -233,6 +266,10 @@ class JobFinder:
 
                 # Only remote jobs
                 if not remote and "remote" not in (loc_str + title).lower():
+                    continue
+
+                # Skip if JobRight result points to an aggregator or listing page
+                if _is_aggregator(apply_url) or _is_listing_page(apply_url):
                     continue
 
                 jobs.append({
