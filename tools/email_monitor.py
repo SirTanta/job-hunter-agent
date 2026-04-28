@@ -30,13 +30,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# OTP/code patterns — ordered by specificity
+# OTP/code patterns — contextualized patterns first, bare digits last resort
 CODE_PATTERNS = [
-    r"\b(\d{6})\b",           # 6-digit OTP (most common)
-    r"\b(\d{4})\b",           # 4-digit PIN
-    r"\b([A-Z0-9]{6,10})\b",  # alphanumeric codes (e.g. Workday magic links)
-    r"code[:\s]+([A-Z0-9]{4,10})",  # "Your code: ABC123"
-    r"pin[:\s]+(\d{4,8})",          # "Your PIN: 1234"
+    r"(?:code|pin|otp|one-time|verification)[:\s#]+([A-Z0-9]{4,8})",  # "Your code: 123456"
+    r"(?:code|pin|otp)[:\s#]+(\d{4,8})",
+    r"\b(\d{6})\b",   # naked 6-digit — last resort
+    r"\b(\d{4})\b",   # naked 4-digit — last resort
 ]
 
 # Domains/keywords that indicate a verification email vs spam
@@ -159,6 +158,7 @@ class EmailMonitor:
 
         Returns the code string, or None on timeout.
         """
+        self._found_code = None  # Clear stale codes from previous calls
         if not self._conn:
             print("[email_monitor] Not connected — returning None")
             return None
@@ -201,13 +201,29 @@ class EmailMonitor:
         if not self._start_uid:
             return
 
+        # Keep connection alive — reconnect if dropped
+        try:
+            self._conn.noop()
+        except Exception:
+            # Connection dropped — reconnect
+            self._conn = imaplib.IMAP4_SSL(self.imap_server, 993)
+            self._conn.login(self.email_addr, self.password)
+            self._conn.select("INBOX")
+
         _, data = self._conn.uid("search", None, f"UID {int(self._start_uid)+1}:*")
         new_uids = data[0].split() if data[0] else []
 
+        max_uid_seen = int(self._start_uid)
+
         for uid in new_uids:
             uid_str = uid.decode()
-            if int(uid_str) <= int(self._start_uid):
+            uid_int = int(uid_str)
+            if uid_int <= int(self._start_uid):
                 continue
+
+            # Track highest UID seen regardless of whether code is found
+            if uid_int > max_uid_seen:
+                max_uid_seen = uid_int
 
             _, msg_data = self._conn.uid("fetch", uid_str, "(RFC822)")
             if not msg_data or not msg_data[0]:
@@ -245,8 +261,14 @@ class EmailMonitor:
 
             if code:
                 self._found_code = code
+                # Advance start_uid before returning so this batch isn't re-scanned
+                self._start_uid = str(max_uid_seen)
                 print(f"[email_monitor] Found code '{code}' in email: {subject[:60]}")
                 return
+
+        # Advance start_uid past all UIDs we've seen, even if no code found
+        if max_uid_seen > int(self._start_uid):
+            self._start_uid = str(max_uid_seen)
 
 
 # ------------------------------------------------------------------
@@ -290,16 +312,21 @@ def _get_email_body(msg) -> str:
 def _extract_code(text: str) -> Optional[str]:
     """
     Extract a verification code from email body text.
-    Returns the most specific match (6-digit preferred over 4-digit).
+    Returns the most specific match (contextualized patterns preferred over bare digits).
     """
     for pattern in CODE_PATTERNS:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
             code = match.group(1)
             # Filter out obviously wrong matches (years, zip codes, phone fragments)
             if re.match(r"^(19|20)\d{2}$", code):   # year
                 continue
             if len(code) == 5:                        # US zip code
+                continue
+            # Skip if surrounded by letters (part of a longer alphanumeric string)
+            start, end = match.start(1), match.end(1)
+            pre  = text[start - 1] if start > 0 else " "
+            post = text[end]       if end < len(text) else " "
+            if pre.isalpha() or post.isalpha():
                 continue
             return code
     return None

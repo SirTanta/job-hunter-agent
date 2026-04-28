@@ -187,10 +187,13 @@ Return ONLY the answer — no explanation, no labels, no punctuation wrapper."""
             "input[placeholder*='First name' i], input[aria-label*='First name' i]",
         ], p.get("name", "").split()[0])
 
+        # Get last name — strip credentials suffix first
+        name_clean = p.get("name", "").split(",")[0].strip()  # "Jon Edwards"
+        last_name = name_clean.split()[-1]  # "Edwards"
         _fill_if_present(page, [
             "input[name*='lastName' i], input[id*='lastName' i], "
             "input[placeholder*='Last name' i], input[aria-label*='Last name' i]",
-        ], p.get("name", "").split()[-1])
+        ], last_name)
 
         _fill_if_present(page, [
             "input[name*='email' i], input[id*='email' i], "
@@ -203,10 +206,12 @@ Return ONLY the answer — no explanation, no labels, no punctuation wrapper."""
             "input[aria-label*='phone' i]",
         ], p.get("phone", ""))
 
-        _fill_if_present(page, [
-            "input[name*='linkedin' i], input[id*='linkedin' i], "
-            "input[placeholder*='linkedin' i]",
-        ], f"https://{p.get('linkedin', '')}")
+        linkedin = p.get("linkedin", "")
+        if linkedin:
+            _fill_if_present(page, [
+                "input[name*='linkedin' i], input[id*='linkedin' i], "
+                "input[placeholder*='linkedin' i]",
+            ], f"https://{linkedin}")
 
         _fill_if_present(page, [
             "input[name*='city' i], input[id*='city' i], "
@@ -240,7 +245,8 @@ Return ONLY the answer — no explanation, no labels, no punctuation wrapper."""
         area = page.query_selector(
             "textarea[id*='cover' i], textarea[name*='cover' i], "
             "textarea[placeholder*='cover' i], "
-            "div[aria-label*='cover letter' i] textarea"
+            "div[contenteditable='true'][aria-label*='cover' i], "
+            "div[role='textbox'][aria-label*='cover' i]"
         )
         if area:
             area.fill(cover_text[:3000])
@@ -356,8 +362,17 @@ Return ONLY the answer — no explanation, no labels, no punctuation wrapper."""
                 btn = page.query_selector(sel)
                 if btn and btn.is_visible():
                     btn.click()
-                    time.sleep(2)
-                    return True
+                    time.sleep(3)
+                    # Verify a success element appeared before reporting success
+                    for csel in CONFIRM_SELECTORS:
+                        try:
+                            if page.query_selector(csel):
+                                print(f"[ats] Submit confirmed at step {step+1}")
+                                return True
+                        except Exception:
+                            pass
+                    # No confirmation found after submit click
+                    return False
 
             # Try next/continue
             advanced = False
