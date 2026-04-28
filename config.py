@@ -3,7 +3,7 @@
 CANDIDATE_PROFILE = {
     "name": "Jon Edwards, M.Ed",
     "location": "Rio Rancho, NM, USA",
-    "email": "jon.edwards.jobs@outlook.com",
+    "email": "jedwards@tanta-holdings.com",
     "phone": "+1 (505) 514-2800",
     "linkedin": "linkedin.com/in/jedwar82/",
     "github": "",
