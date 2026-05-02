@@ -79,6 +79,13 @@ class JobHunterAgent:
                 })
                 print(f"[DB] Saved job id={job_id}")
 
+                # Early pre-filter: skip poor-fit JobRight matches before expensive research
+                match_score = job.get("match_score")
+                if match_score is not None and match_score < 60:
+                    print(f"[skip] match_score {match_score}/100 below threshold")
+                    self._stats["jobs_processed"] += 1
+                    continue
+
                 # Research
                 profile = self.researcher.research(
                     company_name=job.get("company"),

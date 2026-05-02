@@ -42,13 +42,17 @@ AGGREGATOR_DOMAINS = {
     "linkedin.com", "indeed.com", "glassdoor.com", "monster.com",
     "ziprecruiter.com", "simplyhired.com", "careerbuilder.com",
     "dice.com", "hired.com", "wellfound.com", "angel.co",
-    "builtin.com", "themuse.com", "flexjobs.com", "remote.co",
+    "builtin", "themuse.com", "flexjobs.com", "remote.co",
     "naukri.com", "timesjobs.com", "shine.com",
     # Additional aggregators/listing sites identified from live runs
     "remoterocketship.com", "expertini.com", "irvinetechcorp.com",
     "gofractional.com", "insightpartners.com", "edtech.com",
     "jooble.org", "jobgether.com", "talent.com", "jobsora.com",
     "remotive.com", "remotivated.com", "weworkremotely.com", "workingnomads.com",
+    # Live-run false positives
+    "virtualvocations.com", "learn4good.com", "emedcareers.com",
+    "workopolis.com", "edtechjobs.io", "migratemate.co", "jobzmall.com",
+    "lensa.com", "augustschell.applytojob.com",
 }
 
 # URL path patterns that indicate a listing/category page, not a job post.
@@ -59,6 +63,8 @@ LISTING_PATH_PATTERNS = [
     r"/careers/$",
     r"/openings/$",
     r"/positions/$",
+    # Category/filter pages: /careers/remote/, /careers/engineering/, etc.
+    r"/careers/[a-z-]+/$",
 ]
 
 # Domains that ARE direct ATS pages (we want these)

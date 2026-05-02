@@ -120,11 +120,14 @@ class GenericHandler(BaseATSHandler):
         Heuristic: aggregator domains + no <form> or <input> on the page after clicking Apply.
         """
         AGGREGATOR_DOMAINS = [
-            "builtin.com", "jobgether.com", "remoteok.com", "himalayas.app",
+            "builtin", "jobgether.com", "remoteok.com", "himalayas.app",
             "weworkremotely.com", "remote.co/job", "flexjobs.com",
             "jobboard.io", "simplyhired.com", "ziprecruiter.com",
             "careerjet.com", "snagajob.com", "glassdoor.com/job",
             "monster.com/job", "dice.com/job",
+            "virtualvocations.com", "learn4good.com", "emedcareers.com",
+            "workopolis.com", "edtechjobs.io", "migratemate.co", "jobzmall.com",
+            "lensa.com", "themuse.com", "jooble.org", "talent.com",
         ]
         url_lower = url.lower()
         if any(d in url_lower for d in AGGREGATOR_DOMAINS):
