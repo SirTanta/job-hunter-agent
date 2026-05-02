@@ -128,6 +128,7 @@ class GenericHandler(BaseATSHandler):
             "virtualvocations.com", "learn4good.com", "emedcareers.com",
             "workopolis.com", "edtechjobs.io", "migratemate.co", "jobzmall.com",
             "lensa.com", "themuse.com", "jooble.org", "talent.com",
+            "bebee.com", "globalremotehub.com", "jobleads.com", "tallo.com", "career.com",
         ]
         url_lower = url.lower()
         if any(d in url_lower for d in AGGREGATOR_DOMAINS):

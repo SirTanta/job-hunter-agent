@@ -53,6 +53,8 @@ AGGREGATOR_DOMAINS = {
     "virtualvocations.com", "learn4good.com", "emedcareers.com",
     "workopolis.com", "edtechjobs.io", "migratemate.co", "jobzmall.com",
     "lensa.com", "augustschell.applytojob.com",
+    # Additional live-run false positives
+    "bebee.com", "globalremotehub.com", "jobleads.com", "tallo.com", "career.com",
 }
 
 # URL path patterns that indicate a listing/category page, not a job post.

@@ -30,7 +30,7 @@ load_dotenv()
 from tools.ats import detect_ats, get_handler
 from tools.email_monitor import EmailMonitor
 
-MIN_FIT_SCORE = int(os.environ.get("MIN_FIT_SCORE", "6"))
+MIN_FIT_SCORE = int(os.environ.get("MIN_FIT_SCORE", "5"))
 
 
 class AutoApplier:
