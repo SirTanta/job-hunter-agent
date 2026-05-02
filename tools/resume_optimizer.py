@@ -36,8 +36,7 @@ load_dotenv()
 BASE_CV_PATH = Path("templates/resume_base.txt")
 OUTPUT_DIR   = Path(OUTPUT_CONFIG["output_dir"])
 
-# Sonnet for resume — highest reasoning quality needed here
-SONNET_MODEL = "claude-sonnet-4-6"
+HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 # Section heading markers Claude must use in its response
 SECTION_MARKERS = [
@@ -64,7 +63,7 @@ class ResumeOptimizer:
         if not api_key:
             raise EnvironmentError("ANTHROPIC_API_KEY not set in .env")
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.model  = SONNET_MODEL
+        self.model  = HAIKU_MODEL
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
@@ -241,11 +240,9 @@ OUTPUT RULES — READ CAREFULLY:
         """
         Send the prompt to Claude Sonnet and return the tailored resume text.
 
-        Why Sonnet here:
-          Resume tailoring requires nuanced reasoning — understanding which of
-          Jon's experiences best map to each requirement, choosing the
-          right action verbs, writing a compelling summary. Haiku is too
-          shallow for this. Sonnet gives a measurably better result.
+        Why Haiku:
+          ATS keyword matching and resume reframing are pattern-completion tasks
+          Haiku handles well. Keeping cost low is the priority here.
 
         Fallback:
           If the API call fails for any reason (rate limit, network, etc.)

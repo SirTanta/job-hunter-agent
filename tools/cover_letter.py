@@ -37,7 +37,7 @@ load_dotenv()
 BASE_TEMPLATE_PATH = Path("templates/cover_letter_base.txt")
 OUTPUT_DIR         = Path(OUTPUT_CONFIG["output_dir"])
 
-SONNET_MODEL = "claude-sonnet-4-6"
+HAIKU_MODEL = "claude-haiku-4-5-20251001"
 
 # Max chars we pull from the tailored resume to give Claude context
 MAX_CV_CHARS = 3000
@@ -57,7 +57,7 @@ class CoverLetterWriter:
         if not api_key:
             raise EnvironmentError("ANTHROPIC_API_KEY not set in .env")
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.model  = SONNET_MODEL
+        self.model  = HAIKU_MODEL
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------
@@ -204,15 +204,14 @@ Fit score:       {cp.get('fit_score', 'N/A')}/10
 Red flags:       {', '.join(cp.get('red_flags', [])) or 'None'}
 """.strip()
 
-        return f"""
-You are writing a cover letter for Tanzil Ahmed, a Full-Stack Java + MERN developer
-with Data Engineering experience (Kafka, PySpark, GCP, Azure), based in Bengaluru.
+        candidate   = CANDIDATE_PROFILE
+        first_name  = candidate["name"].split(",")[0].split()[-1]  # "Jon"
+        notice      = candidate.get("notice_period", "2 weeks")
 
-CANDIDATE CONTACT INFO (do NOT include in output — handled separately):
-  Email:    {os.environ.get('CANDIDATE_EMAIL', '')}
-  Phone:    {os.environ.get('CANDIDATE_PHONE', '')}
-  LinkedIn: {os.environ.get('CANDIDATE_LINKEDIN', '')}
-  GitHub:   {os.environ.get('CANDIDATE_GITHUB', '')}
+        return f"""
+You are writing a cover letter for {candidate['name']}, a Senior Instructional Designer
+and AI Enablement specialist with 15+ years building high-impact learning programs
+across federal, defense, healthcare, energy, and enterprise sectors. US Navy veteran.
 
 ============================
 JOB DETAILS:
@@ -250,23 +249,24 @@ PARAGRAPH 1 — Why THIS company (60-80 words):
   - Open with a specific, genuine hook about this company — NOT a generic
     "I am writing to express my interest" opener.
   - Reference one concrete fact from the company research (tech stack,
-    mission, product, culture, recent news) that genuinely excites Tanzil.
-  - End by stating the role being applied for and Tanzil's core identity
-    as a developer in one natural sentence.
+    mission, product, culture, recent news) that genuinely excites {first_name}.
+  - End by stating the role being applied for and {first_name}'s identity
+    as an instructional design and AI enablement leader in one natural sentence.
   - Tone: enthusiastic but grounded, like a real person wrote it.
 
-PARAGRAPH 2 — Why Tanzil is the perfect fit (140-160 words):
+PARAGRAPH 2 — Why {first_name} is the perfect fit (140-160 words):
   - Mirror 3-4 exact keywords or phrases from the job description.
   - Connect each keyword to a specific skill or achievement from the resume.
-  - Include at least one quantified result if the resume provides one.
+  - Include at least one quantified result (3,000+ hours eLearning, 15+ years,
+    16,000+ Navy tutorial views, 30% revision cycle reduction, etc.).
   - Do NOT list skills robotically ("I have X, I have Y") — weave them
-    into sentences that tell a story of what Tanzil built and achieved.
+    into sentences that tell a story of what {first_name} built and achieved.
 
 PARAGRAPH 3 — Confident close with call to action (50-70 words):
-  - Express forward-looking enthusiasm — what Tanzil hopes to contribute,
+  - Express forward-looking enthusiasm — what {first_name} hopes to contribute,
     not just what he wants to gain.
   - Include a clear, direct call to action (interview request).
-  - Mention notice period: Immediate / 15 days.
+  - Mention availability: {notice} notice.
   - End on a confident, warm note — not desperate or over-eager.
 
 TOTAL: 350 words maximum.
@@ -324,22 +324,23 @@ DO NOT use these clichés: "I am writing to", "passion for", "team player",
         """
         company    = job.get("company", "your company")
         title      = job.get("title", "this role")
-        tech_stack = ", ".join((company_profile.get("tech_stack") or [])[:4]) or "your tech stack"
+        notice     = CANDIDATE_PROFILE.get("notice_period", "2 weeks")
 
         return (
             f"I was excited to come across the {title} opening at {company}. "
             f"Your work in {company_profile.get('overview', 'this space')[:120]} "
-            f"aligns closely with where I want to take my career as a Full-Stack Java "
-            f"and MERN developer with Data Engineering experience.\n\n"
-            f"My background covers the core technologies your team relies on, including "
-            f"{tech_stack}. I have hands-on experience building scalable backend systems "
-            f"with Java and Spring Boot, designing real-time data pipelines with Kafka and "
-            f"PySpark, and delivering full-stack features with React on GCP and Azure. I am "
-            f"comfortable in agile environments and have contributed to CI/CD pipelines, "
-            f"microservices architectures, and cross-functional teams throughout my work.\n\n"
-            f"I would welcome the opportunity to discuss how my skills align with your team's "
-            f"goals. I am available for an interview at your convenience and can join within "
-            f"15 days. Thank you for considering my application."
+            f"aligns closely with where I want to take my career as an Instructional Designer "
+            f"and AI Enablement specialist.\n\n"
+            f"With 15+ years designing high-impact learning programs across federal, defense, "
+            f"healthcare, and enterprise sectors, I bring proven depth in Articulate 360, ADDIE, "
+            f"and AI enablement curriculum. My work at SAIC on FAA modernization training and "
+            f"building TGA Academy — a full-stack LMS with SCORM 1.2 and scenario-based "
+            f"simulations — demonstrates both technical and instructional rigor. I am comfortable "
+            f"translating complex technical and AI content into measurable learning outcomes for "
+            f"diverse audiences.\n\n"
+            f"I would welcome the opportunity to discuss how my background aligns with your team's "
+            f"goals. I am available for an interview at your convenience and can start within "
+            f"{notice}. Thank you for considering my application."
         )
 
     # ------------------------------------------------------------------
@@ -355,13 +356,13 @@ DO NOT use these clichés: "I am writing to", "passion for", "team player",
         giving us fine-grained control over the spacing and font of each part:
 
           {
-            "date":        "31 March 2026",
-            "subject":     "Application for Associate Software Engineer — Tanzil Ahmed",
+            "date":        "2 May 2026",
+            "subject":     "Application for Senior Instructional Designer — Jon Edwards, M.Ed",
             "salutation":  "Dear Hiring Manager,",
             "paragraphs":  ["Para 1 text", "Para 2 text", "Para 3 text"],
             "signoff":     "Warm regards,",
-            "name":        "Tanzil Ahmed",
-            "contact":     "+91-8753909446  |  tanzilahmed37@gmail.com  |  ...",
+            "name":        "Jon Edwards, M.Ed",
+            "contact":     "+1 (505) 514-2800  |  jedwards@tanta-holdings.com  |  ...",
           }
 
         Why split into a dict rather than one big string:
@@ -380,24 +381,26 @@ DO NOT use these clichés: "I am writing to", "passion for", "team player",
         while len(raw_paragraphs) < 3:
             raw_paragraphs.append("")
 
-        # Build contact footer line
+        # Build contact footer — env vars take priority, CANDIDATE_PROFILE as fallback
         contact_parts = []
-        phone    = os.environ.get("CANDIDATE_PHONE", "")
-        email    = os.environ.get("CANDIDATE_EMAIL", "")
-        linkedin = os.environ.get("CANDIDATE_LINKEDIN", "")
-        github   = os.environ.get("CANDIDATE_GITHUB", "")
+        phone    = os.environ.get("CANDIDATE_PHONE",    CANDIDATE_PROFILE.get("phone", ""))
+        email    = os.environ.get("CANDIDATE_EMAIL",    CANDIDATE_PROFILE.get("email", ""))
+        linkedin = os.environ.get("CANDIDATE_LINKEDIN", CANDIDATE_PROFILE.get("linkedin", ""))
+        github   = os.environ.get("CANDIDATE_GITHUB",   CANDIDATE_PROFILE.get("github", ""))
         for part in [phone, email, linkedin, github]:
             if part:
                 contact_parts.append(part)
 
+        candidate_name = CANDIDATE_PROFILE["name"]
+
         return {
             "date":       date.today().strftime("%-d %B %Y") if os.name != "nt"
                           else date.today().strftime("%d %B %Y").lstrip("0"),
-            "subject":    f"Application for {job_title} — Tanzil Ahmed",
+            "subject":    f"Application for {job_title} — {candidate_name}",
             "salutation": "Dear Hiring Manager,",
             "paragraphs": raw_paragraphs[:3],
             "signoff":    "Warm regards,",
-            "name":       "Tanzil Ahmed",
+            "name":       candidate_name,
             "contact":    "  |  ".join(contact_parts),
             # Metadata — rendered as a grey header block at the top
             "apply_url":  job.get("url", ""),
