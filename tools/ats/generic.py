@@ -32,8 +32,8 @@ SONNET_MODEL = "claude-sonnet-4-6"
 
 class GenericHandler(BaseATSHandler):
 
-    def __init__(self, ats_name: str = "generic", tracker=None):
-        super().__init__(tracker=tracker)
+    def __init__(self, ats_name: str = "generic", tracker=None, email_monitor=None):
+        super().__init__(tracker=tracker, email_monitor=email_monitor)
         self.ats_name = ats_name
 
     def submit(self, page, job: dict, resume_path: Optional[Path],
@@ -42,12 +42,26 @@ class GenericHandler(BaseATSHandler):
         print(f"[{self.ats_name}] Generic handler for {url}")
 
         try:
-            page.goto(url, timeout=25000)
+            page.goto(url, timeout=25000, wait_until="domcontentloaded")
             time.sleep(2)
 
+            # If the page is a 404 or error, bail early
+            if self._is_error_page(page):
+                return self._manual(url, "Page not found or error — stale listing")
+
+            # If this is a job aggregator listing (no form), bail early
+            if self._is_aggregator_listing(page, url):
+                return self._manual(url, "Aggregator listing page — no direct application form")
+
             # Try to find and click an Apply button
-            self._click_apply_button(page)
-            time.sleep(1.5)
+            clicked = self._click_apply_button(page)
+            if clicked:
+                time.sleep(2)
+                # Check if click navigated to a new page with a form
+                # (e.g. aggregator "Apply" goes to actual ATS)
+                page.wait_for_load_state("domcontentloaded", timeout=8000)
+            else:
+                time.sleep(1)
 
             # Always fill standard contact fields first
             self.fill_standard_fields(page)
@@ -72,13 +86,86 @@ class GenericHandler(BaseATSHandler):
             print(f"[{self.ats_name}] Error: {e}")
             return self._manual(url, str(e))
 
+    def _is_error_page(self, page) -> bool:
+        """Return True if the page is a 404 or generic error — no point trying to apply."""
+        try:
+            url = page.url.lower()
+            if any(x in url for x in ["/404", "/error", "/not-found", "job-not-found"]):
+                return True
+
+            title = page.title().lower()
+            if any(x in title for x in ["404", "not found", "page not found", "job not found", "error"]):
+                return True
+
+            body = page.evaluate("() => document.body.innerText.substring(0, 500)").lower()
+            if any(x in body for x in [
+                "this job is no longer available",
+                "job listing has expired",
+                "position has been filled",
+                "this position is no longer",
+                "job has been closed",
+                "404",
+                "page not found",
+                "no longer accepting",
+            ]):
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _is_aggregator_listing(self, page, url: str) -> bool:
+        """
+        Return True if this is a job aggregator listing page (no direct form).
+        Aggregators: BuiltIn, Jobgether, Wellfound listing, RemoteOK, Himalayas, etc.
+        Heuristic: aggregator domains + no <form> or <input> on the page after clicking Apply.
+        """
+        AGGREGATOR_DOMAINS = [
+            "builtin.com", "jobgether.com", "remoteok.com", "himalayas.app",
+            "weworkremotely.com", "remote.co/job", "flexjobs.com",
+            "jobboard.io", "simplyhired.com", "ziprecruiter.com",
+            "careerjet.com", "snagajob.com", "glassdoor.com/job",
+            "monster.com/job", "dice.com/job",
+        ]
+        url_lower = url.lower()
+        if any(d in url_lower for d in AGGREGATOR_DOMAINS):
+            # Extra check: does the page have any input fields?
+            try:
+                input_count = page.evaluate("() => document.querySelectorAll('input, textarea, select').length")
+                if input_count < 3:
+                    return True
+            except Exception:
+                return True
+
+        return False
+
     def _click_apply_button(self, page) -> bool:
-        """Try common Apply button patterns."""
+        """Try common Apply button patterns across major ATS and job boards."""
         selectors = [
-            "a:has-text('Apply Now')", "a:has-text('Apply for this job')",
-            "button:has-text('Apply Now')", "button:has-text('Apply')",
+            # Text-based — most reliable
+            "button:has-text('Apply Now')",
+            "button:has-text('Apply for this job')",
+            "button:has-text('Apply for this position')",
+            "button:has-text('Apply to this job')",
+            "button:has-text('Apply')",
+            "a:has-text('Apply Now')",
+            "a:has-text('Apply for this job')",
+            "a:has-text('Apply for this position')",
+            "a:has-text('Apply')",
+            # Class-based
             "a.apply-btn", "button.apply-btn",
-            "[data-qa='btn-apply']", "[id*='apply' i]",
+            ".apply-button", ".btn-apply",
+            "[class*='apply-button' i]", "[class*='applyButton' i]",
+            # Data attributes
+            "[data-qa='btn-apply']", "[data-automation='apply-button']",
+            "[data-testid='apply-button']", "[data-testid*='apply' i]",
+            # ID-based
+            "[id='apply-button']", "[id='btn-apply']",
+            "[id*='apply' i]:not([type='hidden'])",
+            # Aria-based
+            "[aria-label*='Apply' i]",
+            # BuiltIn / Wellfound / AngelList specific
+            "a[href*='/apply']",
+            "button[type='submit']:has-text('Apply')",
         ]
         for sel in selectors:
             try:
