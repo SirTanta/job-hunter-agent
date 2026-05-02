@@ -224,6 +224,13 @@ Return ONLY the answer — no explanation, no labels, no punctuation wrapper."""
             "input[placeholder*='location' i]",
         ], "Rio Rancho, NM")
 
+        # Full-name fallback for ATS that don't use separate first/last fields (e.g. Lever)
+        _fill_if_present(page, [
+            "input[placeholder*='full name' i], "
+            "input[placeholder='Name *'], input[placeholder='Name'], "
+            "input[aria-label*='full name' i]",
+        ], name_clean)
+
     def upload_resume(self, page, resume_path: Optional[Path]) -> bool:
         """Upload resume to file input. Returns True if uploaded."""
         if not resume_path or not Path(resume_path).exists():
@@ -487,16 +494,29 @@ Return ONLY the answer — no explanation, no labels, no punctuation wrapper."""
                 btn = page.query_selector(sel)
                 if btn and btn.is_visible():
                     btn.click()
-                    time.sleep(3)
-                    # Verify a success element appeared before reporting success
-                    for csel in CONFIRM_SELECTORS:
+                    # Poll up to 8 seconds for confirmation (SPA navigations take time)
+                    for _wait in range(8):
+                        time.sleep(1)
+                        # URL-based success check (e.g. Lever /thanks, Greenhouse /confirmation)
                         try:
-                            if page.query_selector(csel):
-                                print(f"[ats] Submit confirmed at step {step+1}")
+                            current_url = page.url.lower()
+                            if any(x in current_url for x in [
+                                "thanks", "thank-you", "confirmation", "success",
+                                "submitted", "complete", "apply/done",
+                            ]):
+                                print(f"[ats] Submit confirmed via URL at step {step+1}")
                                 return True
                         except Exception:
                             pass
-                    # No confirmation found after submit click
+                        # DOM-based success check
+                        for csel in CONFIRM_SELECTORS:
+                            try:
+                                if page.query_selector(csel):
+                                    print(f"[ats] Submit confirmed at step {step+1}")
+                                    return True
+                            except Exception:
+                                pass
+                    # No confirmation found after 8 seconds
                     return False
 
             # Try next/continue

@@ -21,7 +21,12 @@ class LeverHandler(BaseATSHandler):
 
         try:
             page.goto(url, timeout=20000, wait_until="domcontentloaded")
-            time.sleep(2)
+            # Wait for Lever SPA to render the form
+            try:
+                page.wait_for_selector("input[name='name'], input[name='email']", timeout=6000)
+            except Exception:
+                pass
+            time.sleep(1)
 
             # Bail on stale/404 listings
             title = page.title().lower()
@@ -46,7 +51,35 @@ class LeverHandler(BaseATSHandler):
                 apply_btn.click()
                 time.sleep(1.5)
 
-            # Fill standard fields
+            # Lever uses a single full-name field (not firstName/lastName)
+            name_clean = self.profile.get("name", "").split(",")[0].strip()
+            for sel in [
+                "input[name='name']",
+                "input[placeholder*='full name' i]",
+                "input[id='name']",
+            ]:
+                try:
+                    f = page.query_selector(sel)
+                    if f and f.is_visible():
+                        existing = f.input_value()
+                        if not existing or len(existing) < 2:
+                            f.fill(name_clean)
+                            print(f"[lever] Filled full name: {name_clean}")
+                        break
+                except Exception:
+                    continue
+
+            # Fill current company (Lever 'org' field)
+            org_field = page.query_selector("input[name='org'], input[placeholder*='current company' i]")
+            if org_field and org_field.is_visible():
+                try:
+                    existing = org_field.input_value()
+                    if not existing or len(existing) < 2:
+                        org_field.fill("Tanta Holdings LLC")
+                except Exception:
+                    pass
+
+            # Fill standard fields (email, phone, location)
             self.fill_standard_fields(page)
 
             # Resume upload
@@ -71,6 +104,10 @@ class LeverHandler(BaseATSHandler):
             # Use submit_loop (handles CAPTCHA + email verification too)
             submitted = self.submit_loop(page)
             if submitted:
+                return self._success("lever", url)
+
+            # Lever may have already navigated to /thanks — check before retrying
+            if self._is_success_page(page):
                 return self._success("lever", url)
 
             # Fallback: try direct submit button click + confirm
