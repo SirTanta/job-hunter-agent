@@ -62,8 +62,10 @@ class EmailMonitor:
                  password: str = None,
                  imap_server: str = None,
                  poll_interval: float = 3.0):
-        self.email_addr  = email_addr  or os.environ.get("JOB_HUNT_EMAIL", "jedwar82@gmail.com")
-        self.password    = password    or os.environ.get("JOB_HUNT_IMAP_PASSWORD", "")
+        self.email_addr  = email_addr  or os.environ.get("JOB_HUNT_IMAP_EMAIL",
+                                          os.environ.get("JOB_HUNT_EMAIL", "jedwar82@gmail.com"))
+        raw_pw = password or os.environ.get("JOB_HUNT_IMAP_PASSWORD", "")
+        self.password    = raw_pw.replace(" ", "")   # Gmail App Passwords arrive with spaces
         self.imap_server = imap_server or os.environ.get("JOB_HUNT_IMAP_SERVER", "imap.gmail.com")
         self.poll_interval = poll_interval
 

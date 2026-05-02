@@ -37,8 +37,9 @@ class BaseATSHandler:
       - _fill_form(page, resume_path, cover_path) — ATS-specific field filling
     """
 
-    def __init__(self, tracker=None):
+    def __init__(self, tracker=None, email_monitor=None):
         self.tracker = tracker
+        self.email_monitor = email_monitor
         self.profile = CANDIDATE_PROFILE
         claude_key = os.environ.get("ANTHROPIC_API_KEY")
         self.claude = anthropic.Anthropic(api_key=claude_key) if claude_key else None
@@ -309,6 +310,109 @@ Return ONLY the answer — no explanation, no labels, no punctuation wrapper."""
         time.sleep(0.5)
 
     # ------------------------------------------------------------------
+    # CAPTCHA and email verification detection
+    # ------------------------------------------------------------------
+
+    def _detect_captcha(self, page) -> bool:
+        """Return True if a CAPTCHA challenge is visible on the page."""
+        captcha_signals = [
+            "iframe[src*='recaptcha']",
+            "iframe[src*='hcaptcha']",
+            "iframe[src*='challenges.cloudflare.com']",
+            "div.g-recaptcha",
+            "div[data-sitekey]",
+            "div#cf-challenge-body-text",
+            "div.cf-browser-verification",
+            ".h-captcha",
+            "[aria-label*='CAPTCHA' i]",
+        ]
+        for sel in captcha_signals:
+            try:
+                el = page.query_selector(sel)
+                if el and el.is_visible():
+                    return True
+            except Exception:
+                pass
+        # Text-based fallback
+        try:
+            body = page.inner_text("body")[:2000].lower()
+            if any(kw in body for kw in ("prove you're human", "verify you're human",
+                                          "i'm not a robot", "complete the captcha",
+                                          "security check", "just a moment", "checking your browser")):
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _detect_email_verification(self, page) -> bool:
+        """Return True if the page is asking for a verification code sent by email."""
+        code_prompts = [
+            "input[placeholder*='verification code' i]",
+            "input[placeholder*='enter code' i]",
+            "input[placeholder*='one-time' i]",
+            "input[aria-label*='verification code' i]",
+            "input[aria-label*='security code' i]",
+            "input[name*='otp' i]",
+            "input[name*='code' i][type='text']",
+            "input[id*='otp' i]",
+            "input[id*='verification' i]",
+        ]
+        for sel in code_prompts:
+            try:
+                el = page.query_selector(sel)
+                if el and el.is_visible():
+                    return True
+            except Exception:
+                pass
+        # Text-based fallback
+        try:
+            body = page.inner_text("body")[:2000].lower()
+            if any(kw in body for kw in ("enter the code", "enter your code",
+                                          "verification code", "we sent a code",
+                                          "check your email", "confirm your email",
+                                          "one-time code", "security code")):
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _fill_email_verification_code(self, page, code: str) -> bool:
+        """Fill a verification code into the visible code input and submit."""
+        code_inputs = [
+            "input[placeholder*='verification code' i]",
+            "input[placeholder*='enter code' i]",
+            "input[placeholder*='one-time' i]",
+            "input[aria-label*='verification code' i]",
+            "input[aria-label*='security code' i]",
+            "input[name*='otp' i]",
+            "input[name*='code' i][type='text']",
+            "input[id*='otp' i]",
+            "input[id*='verification' i]",
+        ]
+        for sel in code_inputs:
+            try:
+                el = page.query_selector(sel)
+                if el and el.is_visible():
+                    el.fill(code)
+                    time.sleep(0.5)
+                    # Try to submit / click Verify
+                    for btn_sel in [
+                        "button:has-text('Verify')",
+                        "button:has-text('Confirm')",
+                        "button:has-text('Submit')",
+                        "button[type='submit']",
+                    ]:
+                        btn = page.query_selector(btn_sel)
+                        if btn and btn.is_visible():
+                            btn.click()
+                            time.sleep(1.5)
+                            return True
+                    return True
+            except Exception:
+                continue
+        return False
+
+    # ------------------------------------------------------------------
     # Standard submit loop
     # ------------------------------------------------------------------
 
@@ -341,6 +445,27 @@ Return ONLY the answer — no explanation, no labels, no punctuation wrapper."""
 
         for step in range(max_steps):
             time.sleep(1.5)
+
+            # Bail immediately if CAPTCHA — cannot automate past this
+            if self._detect_captcha(page):
+                print(f"[ats] CAPTCHA detected at step {step+1} — falling back to manual")
+                return False
+
+            # Handle email verification if ATS is waiting for a code
+            if self._detect_email_verification(page):
+                if self.email_monitor:
+                    print(f"[ats] Email verification detected — waiting for code (up to 90s)")
+                    code = self.email_monitor.wait_for_code(timeout=90)
+                    if code:
+                        print(f"[ats] Got code {code} — filling in")
+                        self._fill_email_verification_code(page, code)
+                        time.sleep(2)
+                    else:
+                        print("[ats] No code received within timeout — falling back to manual")
+                        return False
+                else:
+                    print(f"[ats] Email verification detected but no monitor active — falling back to manual")
+                    return False
 
             # Answer any new questions that appeared
             try:

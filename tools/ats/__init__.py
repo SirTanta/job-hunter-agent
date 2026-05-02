@@ -91,8 +91,7 @@ def get_handler(url: str, tracker=None, email_monitor=None, **kwargs):
     """
     ats_name, module_name = detect_ats(url)
 
-    # Only Workday needs email_monitor directly — others use the login manager via base
-    base_kwargs = {"tracker": tracker}
+    base_kwargs = {"tracker": tracker, "email_monitor": email_monitor}
 
     if module_name == "linkedin":
         from tools.ats.linkedin import LinkedInHandler
@@ -111,7 +110,7 @@ def get_handler(url: str, tracker=None, email_monitor=None, **kwargs):
         return AshbyHandler(**base_kwargs)
     elif module_name == "workday":
         from tools.ats.workday import WorkdayHandler
-        return WorkdayHandler(tracker=tracker, email_monitor=email_monitor)
+        return WorkdayHandler(**base_kwargs)
     elif module_name == "smartrecruiters":
         from tools.ats.smartrecruiters import SmartRecruitersHandler
         return SmartRecruitersHandler(**base_kwargs)
