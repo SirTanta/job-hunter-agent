@@ -144,7 +144,7 @@ def update_apply_today(cover_map: dict) -> None:
         result.append(line)
 
     APPLY_TODAY.write_text("\n".join(result), encoding="utf-8")
-    print(f"\n[update] APPLY_TODAY updated → {APPLY_TODAY.name}")
+    print(f"\n[update] APPLY_TODAY updated -> {APPLY_TODAY.name}")
 
 
 def main():

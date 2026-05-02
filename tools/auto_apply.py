@@ -62,7 +62,7 @@ class AutoApplier:
 
         url = job.get("url", "")
         ats_name, _ = detect_ats(url)
-        print(f"\n[auto_apply] {job.get('title')} @ {job.get('company')} → {ats_name}")
+        print(f"\n[auto_apply] {job.get('title')} @ {job.get('company')} -> {ats_name}")
 
         try:
             from playwright.sync_api import sync_playwright

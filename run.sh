@@ -2,6 +2,7 @@
 # Job Hunt + Client Hunt Agent — VM runner
 # Logs to /var/log/kipi/job-hunt.log
 
+export PYTHONIOENCODING=utf-8
 LOG=/var/log/kipi/job-hunt.log
 mkdir -p /var/log/kipi
 

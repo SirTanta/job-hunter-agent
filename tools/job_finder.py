@@ -96,6 +96,19 @@ def _is_direct(url: str) -> bool:
     return False
 
 
+def _is_remote(job: dict) -> bool:
+    """True if the job appears to be a remote position."""
+    text = (
+        (job.get("title") or "") + " " +
+        (job.get("description") or "") + " " +
+        (job.get("location") or "")
+    ).lower()
+    # Skip filter if we have no text to judge by — give benefit of the doubt
+    if not text.strip():
+        return True
+    return "remote" in text
+
+
 def _parse_date(date_str: str) -> datetime | None:
     """Try to parse a date string into a UTC datetime."""
     if not date_str:
@@ -195,6 +208,12 @@ class JobFinder:
         # Filter by freshness
         jobs = [j for j in jobs if _age_hours(j.get("posted_date", "")) <= cutoff_hours
                 or j.get("posted_date") == ""]
+
+        # Filter: remote only (all searches target remote positions)
+        before = len(jobs)
+        jobs = [j for j in jobs if _is_remote(j)]
+        if len(jobs) < before:
+            print(f"[job_finder] Filtered {before - len(jobs)} non-remote results")
 
         # Sort: direct/ATS first, then by freshness score descending
         jobs.sort(key=lambda j: (
