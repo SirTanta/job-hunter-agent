@@ -1,19 +1,16 @@
 # Session Checkpoint
 **Project:** job-hunter-agent
-**Last active:** 2026-04-28T15:14:39.927Z
+**Last active:** 2026-04-28T23:42:04.928Z
 
 ## Modified files (unstaged)
-api.py
-tools/company_research.py
-tools/cover_letter.py
-tools/cv_customizer.py
+SESSION-CHECKPOINT.md
 
 ## New untracked files
-SESSION-CHECKPOINT.md
+build_notion_infra_map.py
 
 ## Git status
 ```
-7c04633 config: switch job search email to jon.edwards.jobs@outlook.com
-2a163fe feat: Notion job hunt dashboard — auto-sync applications and email updates
-b1a2e4a feat: login flows, real-time OTP capture, Workday tab fix, direct career pages
+6d7bbba fix: file-backed Tavily daily budget — prevents quota burn across process restarts
+ff74cb6 Fix Apollo Cloudflare 1010 block with realistic User-Agent header
+7a5eb0e Add Apollo sequence integration for client hunt pipeline
 ```
